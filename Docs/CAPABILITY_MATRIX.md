@@ -83,8 +83,18 @@ Legend: ✅ Implemented | 🔶 Partial | ❌ Missing / use Epic low-level | 🚫
 | Enemy AI / spawners | 🚫 | **Project architecture missing** |
 | Dungeon proc-gen | 🚫 | Manual craft + `re-voxel-world` only |
 | Inventory | 🔶 | `re_inventory_bplibrary` bridge exists; no REAgentTools wrapper yet |
-| Niagara authoring | 🚫 | Documented unsupported — use `re-niagara-fx` skill + manual |
+| Niagara authoring | 🚫 | **Not implemented yet** — next high-value toolset candidate (`RENiagaraWorkflowTools`) |
 | Animation / montage | ✅ | `REAnimWorkflowTools` — Control Rig pose timeline → AnimSequence + Montage |
+
+## Recommended next toolsets (priority)
+
+| Toolset | Why |
+|---------|-----|
+| **`RENiagaraWorkflowTools`** | Circles, bolts, trails — RE already has many NS assets; agents currently chain Epic Niagara tools or RC. Composites: set system on component + verify, tune user params + save, spawn preview actor, compact emitter/param inspect. |
+| `REInventoryWorkflowTools` | Thin wrapper over existing `re_inventory_*` Python — set counts, refresh UI, compact dump (game-specific). |
+| `REVoxelWorkflowTools` | Optional later — carve/dig helpers are project scripts today; only wrap if MCP call count hurts. |
+
+**Still out of scope until architecture exists:** GAS ability authoring, enemy AI systems, full Niagara graph node editing (param/tune/assign first; not a Niagara node DSL).
 
 ## When to use Epic vs RE
 
