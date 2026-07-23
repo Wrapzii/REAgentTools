@@ -66,7 +66,7 @@ Legend: ✅ Implemented | 🔶 Partial | ❌ Missing / use Epic low-level | 🚫
 | Workflow | Status | Notes |
 |----------|--------|-------|
 | compile_save_validate | ✅ | |
-| get_recent_errors_compact | 🚫 | No stable Python log-tail API |
+| get_recent_errors_compact | 🔶 | Prefer Epic `LogsToolset.GetLogEntries` (works); RECapture has Saved/Logs fallback |
 | run_validation_bundle | ✅ | compile + map check + save |
 
 ## Batch
@@ -79,7 +79,7 @@ Legend: ✅ Implemented | 🔶 Partial | ❌ Missing / use Epic low-level | 🚫
 
 | Domain | Status | Notes |
 |--------|--------|-------|
-| GAS / abilities | 🚫 | **Project architecture missing** |
+| GAS / abilities | 🔶 | No full GAS graph authoring — but `DT_Abilities` + `CastAbility` exist; `pie_cast_and_capture` drives that |
 | Enemy AI / spawners | 🚫 | **Project architecture missing** |
 | Dungeon proc-gen | 🚫 | Manual craft + `re-voxel-world` only |
 | Inventory | 🔶 | `re_inventory_bplibrary` bridge exists; no REAgentTools wrapper yet |
@@ -88,17 +88,18 @@ Legend: ✅ Implemented | 🔶 Partial | ❌ Missing / use Epic low-level | 🚫
 | Character mesh / combat montages | ✅ | `RECharacterWorkflowTools` (v1.1) |
 | Mood lighting | ✅ | `RELightingWorkflowTools` (v1.1) |
 | Animation / montage | ✅ | `REAnimWorkflowTools` — Control Rig pose timeline → AnimSequence + Montage |
+| Viewport / FX material capture | ✅ | `RECaptureWorkflowTools` (v1.2) — path + downscale/JPEG; not Epic base64 |
+| Log tail / Live Coding / Slate keys | ✅ | **Epic** `LogsToolset` / `LiveCodingToolset` / `SlateInspector` — do not rebuild |
 
-## Recommended next toolsets (Wave 2)
+## Recommended next toolsets (Wave 2 remainder)
 
 | Toolset | Why |
 |---------|-----|
 | `REPCGWorkflowTools` | Spawn graph instance + set params + regenerate for boss dress |
 | `REInventoryWorkflowTools` | Wrap `re_inventory_*` for dig→loot proofs |
 | `REPhysicsWorkflowTools` | Collision profile / simulate toggles (not PhysicsAsset editor) |
-| `RECaptureWorkflowTools` | Budget-safe viewport capture → path only |
 
-**Still out of scope:** GAS ability graph authoring; full Niagara module-graph DSL; landscape brush sculpt.
+**Still out of scope:** GAS ability graph authoring; full Niagara module-graph DSL; landscape brush sculpt; rebuilding Logs/LiveCoding/Slate.
 
 ## When to use Epic vs RE
 

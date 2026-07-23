@@ -49,14 +49,21 @@
 
 Also extend **REActorWorkflowTools**: `place_from_asset_and_verify`, `rotate_actors_and_verify` (manual entity place/rotate without dress-specific mesh logic).
 
-### Wave 2 — next (v1.2)
+### Wave 2a — shipped (v1.2.0)
+
+| Toolset | Why |
+|---------|-----|
+| **RECaptureWorkflowTools** | Viewport / mat preview / PIE cast → `Saved/Screenshots` path-only + max_dimension/JPEG |
+
+See [VISUAL_LOOP.md](VISUAL_LOOP.md) — Epic Logs / LiveCoding / Slate already work; do not rebuild them.
+
+### Wave 2b — next
 
 | Toolset | Why |
 |---------|-----|
 | **REPCGWorkflowTools** | `spawn_pcg_graph_instance`, `set_pcg_params_and_regenerate` — boss dress / scatter |
 | **REPhysicsWorkflowTools** | Limited: enable simulate on component, set collision profile batch — **not** full PhysicsAsset editor |
 | **REInventoryWorkflowTools** | Wrap `re_inventory_*` for dig→loot proofs |
-| **RECaptureWorkflowTools** | Viewport capture → `Saved/Screenshots` path-only (budget-safe) |
 
 ### Wave 3 — only if proven pain
 
@@ -84,4 +91,4 @@ Wave 1 DONE when:
 
 ## Version
 
-`1.0.x` → **`1.1.0`** for Wave 1.
+`1.0.x` → **`1.1.0`** Wave 1 → **`1.2.0`** RECapture / visual loop.

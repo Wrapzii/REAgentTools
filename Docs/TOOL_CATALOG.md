@@ -137,3 +137,17 @@ Actor id field aliases (any one): `label`, `actor_label`, `name`.
 |-----------|------|---------|
 | reload_workflow_modules | — | Hot-reload Python + re-register (after first load of this tool) |
 | get_plugin_project_notes | — | JSON architecture notes |
+
+## RECaptureWorkflowTools (v1.2)
+
+Budget-safe captures — **path + width/height/bytes only** (never inline base64).
+
+| tool_name | Args | Returns |
+|-----------|------|---------|
+| capture_viewport_to_disk | filename?, max_dimension=1280, jpeg_quality=0, width, height | path under `Saved/Screenshots` |
+| render_material_preview_to_disk | material_path, parameters_json?, max_dimension, jpeg_quality=85 | lit plane preview (ParticleColor defaults) |
+| pie_cast_and_capture | ability_id, aim_dir_json?, capture_delay_ms=400, max_dimension, jpeg_quality, start_pie_if_needed=false | CastAbility + disk shot |
+| get_recent_log_entries_compact | pattern="RE", max_entries=25 | Saved/Logs fallback (prefer Epic LogsToolset) |
+| visual_loop_tool_notes | — | Epic Logs / LiveCoding / Slate vs RECapture map |
+
+Outside the plugin: `Content/Python/mcp_capture_viewport_to_disk.py` wraps Epic `CaptureViewport` → decode → disk (+ `--max` / `--jpeg`).

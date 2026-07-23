@@ -7,6 +7,7 @@ from re_agent_tools.toolsets.anim_workflow_tools import REAnimWorkflowTools
 from re_agent_tools.toolsets.asset_workflow_tools import REAssetWorkflowTools
 from re_agent_tools.toolsets.batch_workflow_tools import REBatchWorkflowTools
 from re_agent_tools.toolsets.blueprint_workflow_tools import REBlueprintWorkflowTools
+from re_agent_tools.toolsets.capture_workflow_tools import RECaptureWorkflowTools
 from re_agent_tools.toolsets.character_workflow_tools import RECharacterWorkflowTools
 from re_agent_tools.toolsets.context_tools import REContextTools
 from re_agent_tools.toolsets.dress_workflow_tools import REDressWorkflowTools
@@ -32,4 +33,5 @@ _registration = Registration([
     REDressWorkflowTools,
     RECharacterWorkflowTools,
     RELightingWorkflowTools,
+    RECaptureWorkflowTools,
 ])

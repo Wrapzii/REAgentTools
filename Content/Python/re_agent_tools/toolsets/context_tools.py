@@ -34,7 +34,7 @@ class REContextTools(unreal.ToolsetDefinition):
         request_id = make_request_id()
         caps = {
             "plugin": "REAgentTools",
-            "version": "1.1.0",
+            "version": "1.2.0",
             "toolsets": [
                 "REContextTools",
                 "REActorWorkflowTools",
@@ -46,6 +46,11 @@ class REContextTools(unreal.ToolsetDefinition):
                 "REValidationWorkflowTools",
                 "REBatchWorkflowTools",
                 "REProjectWorkflowTools",
+                "RENiagaraWorkflowTools",
+                "REDressWorkflowTools",
+                "RECharacterWorkflowTools",
+                "RELightingWorkflowTools",
+                "RECaptureWorkflowTools",
             ],
             "limits": {
                 "search": limits.SEARCH_LIMIT,

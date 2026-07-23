@@ -15,7 +15,7 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 3. Console: `ModelContextProtocol.RefreshTools`
 4. Verify in MCP Inspector or Cursor `unreal-mcp` — toolsets under `re_agent_tools.toolsets.*`
 
-## Toolsets (v1.1.0 — 14)
+## Toolsets (v1.2.0 — 15)
 
 | Toolset | Purpose |
 |---------|---------|
@@ -25,6 +25,7 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 | `RENiagaraWorkflowTools` | Place/assign Niagara systems + user params |
 | `RECharacterWorkflowTools` | Character mesh, combat montages, sockets |
 | `RELightingWorkflowTools` | Environment light inventory + mood presets |
+| `RECaptureWorkflowTools` | Path-only screenshots, FX mat preview, PIE cast+capture |
 | `REAnimWorkflowTools` | Control Rig pose → AnimSequence/Montage |
 | `REAssetWorkflowTools` | Find, bulk edit, save assets |
 | `REBlueprintWorkflowTools` | Inspect, create, defaults, compile |
@@ -36,6 +37,7 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 
 ## Docs
 
+- [VISUAL_LOOP.md](Docs/VISUAL_LOOP.md) — Epic Logs/LiveCoding/Slate vs RECapture
 - [EXPAND_PLAN.md](Docs/EXPAND_PLAN.md) — research + wave roadmap
 - [CAPABILITY_MATRIX.md](Docs/CAPABILITY_MATRIX.md) — supported vs missing
 - [USAGE_GUIDE.md](Docs/USAGE_GUIDE.md) — example prompts
