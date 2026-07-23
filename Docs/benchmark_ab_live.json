@@ -1,0 +1,375 @@
+{
+  "ok": true,
+  "updated": "2026-07-23T23:12:36.327314+00:00",
+  "method": "live MCP A/B via _mcp_client (not Cursor dashboard)",
+  "token_model": {
+    "payload_tokens": "wire_bytes / 4",
+    "agent_tokens_est_fresh_chat": "cumulative: each call costs 50000+all payloads so far",
+    "agent_tokens_est_fat_chat": "cumulative: each call costs 150000+all payloads so far",
+    "agent_tokens_naive_flat": "call_count * 150000 (simple Usage-row heuristic)",
+    "source": "Content/RE/MCP_CONTEXT_ISOLATION.md"
+  },
+  "tasks": {
+    "spawn_verify": {
+      "epic": {
+        "name": "spawn_verify_epic",
+        "call_count": 6,
+        "ok_calls": 6,
+        "request_bytes": 1656,
+        "response_bytes": 1190,
+        "wire_bytes_total": 2846,
+        "payload_tokens_est": 710,
+        "agent_tokens_est_fresh_chat": 302524,
+        "agent_tokens_est_fat_chat": 902524,
+        "agent_tokens_naive_flat": 900000,
+        "elapsed_ms": 95994
+      },
+      "composite": {
+        "name": "spawn_verify_composite",
+        "call_count": 1,
+        "ok_calls": 0,
+        "request_bytes": 405,
+        "response_bytes": 1159,
+        "wire_bytes_total": 1564,
+        "payload_tokens_est": 391,
+        "agent_tokens_est_fresh_chat": 50391,
+        "agent_tokens_est_fat_chat": 150391,
+        "agent_tokens_naive_flat": 150000,
+        "elapsed_ms": 15997
+      },
+      "call_reduction": "6 \u2192 1",
+      "payload_token_ratio_composite_over_epic": 0.55,
+      "agent_token_ratio_fat_composite_over_epic": 0.17
+    },
+    "batch_move_5": {
+      "epic": {
+        "name": "batch_move_5_epic",
+        "call_count": 15,
+        "ok_calls": 15,
+        "request_bytes": 3255,
+        "response_bytes": 2370,
+        "wire_bytes_total": 5625,
+        "payload_tokens_est": 1405,
+        "agent_tokens_est_fresh_chat": 761185,
+        "agent_tokens_est_fat_chat": 2261185,
+        "agent_tokens_naive_flat": 2250000,
+        "elapsed_ms": 239142
+      },
+      "composite": {
+        "name": "batch_move_5_composite",
+        "call_count": 1,
+        "ok_calls": 1,
+        "request_bytes": 807,
+        "response_bytes": 745,
+        "wire_bytes_total": 1552,
+        "payload_tokens_est": 388,
+        "agent_tokens_est_fresh_chat": 50388,
+        "agent_tokens_est_fat_chat": 150388,
+        "agent_tokens_naive_flat": 150000,
+        "elapsed_ms": 15997
+      },
+      "call_reduction": "15 \u2192 1",
+      "payload_token_ratio_composite_over_epic": 0.28,
+      "agent_token_ratio_fat_composite_over_epic": 0.07
+    }
+  },
+  "detail": {
+    "spawn_verify_epic": {
+      "name": "spawn_verify_epic",
+      "call_count": 6,
+      "ok_calls": 6,
+      "request_bytes": 1656,
+      "response_bytes": 1190,
+      "wire_bytes_total": 2846,
+      "payload_tokens_est": 710,
+      "agent_tokens_est_fresh_chat": 302524,
+      "agent_tokens_est_fat_chat": 902524,
+      "agent_tokens_naive_flat": 900000,
+      "elapsed_ms": 95994,
+      "calls": [
+        {
+          "toolset": "editor_toolset.toolsets.scene.SceneTools",
+          "tool": "add_to_scene_from_class",
+          "request_bytes": 362,
+          "response_bytes": 231,
+          "payload_tokens_est": 148,
+          "elapsed_ms": 15996,
+          "ok": true,
+          "snippet": "{\"returnValue\":{\"refPath\":\"/Game/RE/Hub/Lvl_Hub.Lvl_Hub:PersistentLevel.StaticMeshActor_UAID_00155D2318920CF102_1723867103\"}}"
+        },
+        {
+          "toolset": "editor_toolset.toolsets.scene.SceneTools",
+          "tool": "find_actors",
+          "request_bytes": 171,
+          "response_bytes": 233,
+          "payload_tokens_est": 101,
+          "elapsed_ms": 15999,
+          "ok": true,
+          "snippet": "{\"returnValue\":[{\"refPath\":\"/Game/RE/Hub/Lvl_Hub.Lvl_Hub:PersistentLevel.StaticMeshActor_UAID_00155D2318920CF102_1723867103\"}]}"
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "set_label",
+          "request_bytes": 254,
+          "response_bytes": 122,
+          "payload_tokens_est": 94,
+          "elapsed_ms": 16002,
+          "ok": true,
+          "snippet": "{\"returnValue\":true}"
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "set_actor_transform",
+          "request_bytes": 408,
+          "response_bytes": 122,
+          "payload_tokens_est": 132,
+          "elapsed_ms": 15998,
+          "ok": true,
+          "snippet": "{\"returnValue\":true}"
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "get_actor_transform",
+          "request_bytes": 232,
+          "response_bytes": 266,
+          "payload_tokens_est": 124,
+          "elapsed_ms": 15999,
+          "ok": true,
+          "snippet": "{\"returnValue\":{\"location\":{\"x\":110,\"y\":210,\"z\":310},\"rotation\":{\"pitch\":0,\"yaw\":14.999999999999998,\"roll\":-0},\"scale\":{\"x\":1,\"y\":1,\"z\":1}}}"
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "get_actor_bounds",
+          "request_bytes": 229,
+          "response_bytes": 216,
+          "payload_tokens_est": 111,
+          "elapsed_ms": 16000,
+          "ok": true,
+          "snippet": "{\"returnValue\":{\"min\":{\"x\":110,\"y\":210,\"z\":310},\"max\":{\"x\":110,\"y\":210,\"z\":310},\"isValid\":true}}"
+        }
+      ]
+    },
+    "spawn_verify_composite": {
+      "name": "spawn_verify_composite",
+      "call_count": 1,
+      "ok_calls": 0,
+      "request_bytes": 405,
+      "response_bytes": 1159,
+      "wire_bytes_total": 1564,
+      "payload_tokens_est": 391,
+      "agent_tokens_est_fresh_chat": 50391,
+      "agent_tokens_est_fat_chat": 150391,
+      "agent_tokens_naive_flat": 150000,
+      "elapsed_ms": 15997,
+      "calls": [
+        {
+          "toolset": "re_agent_tools.toolsets.actor_workflow_tools.REActorWorkflowTools",
+          "tool": "spawn_configure_attach_and_verify",
+          "request_bytes": 405,
+          "response_bytes": 1159,
+          "payload_tokens_est": 391,
+          "elapsed_ms": 15997,
+          "ok": false,
+          "snippet": "Function \"spawn_configure_attach_and_verify\", input param \"folder_path\" is required by the function input schema Json, but is missing from the incoming function input params Json.\nFunction schema Json -\n{\"type\":\"object\",\"properties\":{\"class"
+        }
+      ]
+    },
+    "batch_move_5_epic": {
+      "name": "batch_move_5_epic",
+      "call_count": 15,
+      "ok_calls": 15,
+      "request_bytes": 3255,
+      "response_bytes": 2370,
+      "wire_bytes_total": 5625,
+      "payload_tokens_est": 1405,
+      "agent_tokens_est_fresh_chat": 761185,
+      "agent_tokens_est_fat_chat": 2261185,
+      "agent_tokens_naive_flat": 2250000,
+      "elapsed_ms": 239142,
+      "calls": [
+        {
+          "toolset": "editor_toolset.toolsets.scene.SceneTools",
+          "tool": "find_actors",
+          "request_bytes": 168,
+          "response_bytes": 120,
+          "payload_tokens_est": 72,
+          "elapsed_ms": 16003,
+          "ok": true,
+          "snippet": "{\"returnValue\":[]}"
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "set_actor_transform",
+          "request_bytes": 328,
+          "response_bytes": 177,
+          "payload_tokens_est": 126,
+          "elapsed_ms": 15998,
+          "ok": true,
+          "snippet": "Parameter error: None is not valid value for property 'actor'."
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "get_actor_transform",
+          "request_bytes": 155,
+          "response_bytes": 177,
+          "payload_tokens_est": 83,
+          "elapsed_ms": 15999,
+          "ok": true,
+          "snippet": "Parameter error: None is not valid value for property 'actor'."
+        },
+        {
+          "toolset": "editor_toolset.toolsets.scene.SceneTools",
+          "tool": "find_actors",
+          "request_bytes": 168,
+          "response_bytes": 120,
+          "payload_tokens_est": 72,
+          "elapsed_ms": 15999,
+          "ok": true,
+          "snippet": "{\"returnValue\":[]}"
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "set_actor_transform",
+          "request_bytes": 328,
+          "response_bytes": 177,
+          "payload_tokens_est": 126,
+          "elapsed_ms": 16003,
+          "ok": true,
+          "snippet": "Parameter error: None is not valid value for property 'actor'."
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "get_actor_transform",
+          "request_bytes": 155,
+          "response_bytes": 177,
+          "payload_tokens_est": 83,
+          "elapsed_ms": 15997,
+          "ok": true,
+          "snippet": "Parameter error: None is not valid value for property 'actor'."
+        },
+        {
+          "toolset": "editor_toolset.toolsets.scene.SceneTools",
+          "tool": "find_actors",
+          "request_bytes": 168,
+          "response_bytes": 120,
+          "payload_tokens_est": 72,
+          "elapsed_ms": 16000,
+          "ok": true,
+          "snippet": "{\"returnValue\":[]}"
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "set_actor_transform",
+          "request_bytes": 328,
+          "response_bytes": 177,
+          "payload_tokens_est": 126,
+          "elapsed_ms": 16002,
+          "ok": true,
+          "snippet": "Parameter error: None is not valid value for property 'actor'."
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "get_actor_transform",
+          "request_bytes": 155,
+          "response_bytes": 177,
+          "payload_tokens_est": 83,
+          "elapsed_ms": 15998,
+          "ok": true,
+          "snippet": "Parameter error: None is not valid value for property 'actor'."
+        },
+        {
+          "toolset": "editor_toolset.toolsets.scene.SceneTools",
+          "tool": "find_actors",
+          "request_bytes": 168,
+          "response_bytes": 120,
+          "payload_tokens_est": 72,
+          "elapsed_ms": 15999,
+          "ok": true,
+          "snippet": "{\"returnValue\":[]}"
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "set_actor_transform",
+          "request_bytes": 328,
+          "response_bytes": 177,
+          "payload_tokens_est": 126,
+          "elapsed_ms": 16002,
+          "ok": true,
+          "snippet": "Parameter error: None is not valid value for property 'actor'."
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "get_actor_transform",
+          "request_bytes": 155,
+          "response_bytes": 177,
+          "payload_tokens_est": 83,
+          "elapsed_ms": 15998,
+          "ok": true,
+          "snippet": "Parameter error: None is not valid value for property 'actor'."
+        },
+        {
+          "toolset": "editor_toolset.toolsets.scene.SceneTools",
+          "tool": "find_actors",
+          "request_bytes": 168,
+          "response_bytes": 120,
+          "payload_tokens_est": 72,
+          "elapsed_ms": 15999,
+          "ok": true,
+          "snippet": "{\"returnValue\":[]}"
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "set_actor_transform",
+          "request_bytes": 328,
+          "response_bytes": 177,
+          "payload_tokens_est": 126,
+          "elapsed_ms": 15603,
+          "ok": true,
+          "snippet": "Parameter error: None is not valid value for property 'actor'."
+        },
+        {
+          "toolset": "editor_toolset.toolsets.actor.ActorTools",
+          "tool": "get_actor_transform",
+          "request_bytes": 155,
+          "response_bytes": 177,
+          "payload_tokens_est": 83,
+          "elapsed_ms": 15542,
+          "ok": true,
+          "snippet": "Parameter error: None is not valid value for property 'actor'."
+        }
+      ]
+    },
+    "batch_move_5_composite": {
+      "name": "batch_move_5_composite",
+      "call_count": 1,
+      "ok_calls": 1,
+      "request_bytes": 807,
+      "response_bytes": 745,
+      "wire_bytes_total": 1552,
+      "payload_tokens_est": 388,
+      "agent_tokens_est_fresh_chat": 50388,
+      "agent_tokens_est_fat_chat": 150388,
+      "agent_tokens_naive_flat": 150000,
+      "elapsed_ms": 15997,
+      "calls": [
+        {
+          "toolset": "re_agent_tools.toolsets.actor_workflow_tools.REActorWorkflowTools",
+          "tool": "batch_transform_actors",
+          "request_bytes": 807,
+          "response_bytes": 745,
+          "payload_tokens_est": 388,
+          "elapsed_ms": 15997,
+          "ok": true,
+          "snippet": "{\"returnValue\":\"{\\\"success\\\":false,\\\"request_id\\\":\\\"d8eee8cc4dbe\\\",\\\"operation\\\":\\\"batch_transform_actors\\\",\\\"summary\\\":\\\"Transformed 0 actors\\\",\\\"resolved_targets\\\":[],\\\"changed\\\":[],\\\"created\\\":[],\\\"deleted\\\":[],\\\"compiled\\\":[],\\\"saved\\\":"
+        }
+      ]
+    }
+  },
+  "headline": {
+    "spawn_calls": "6 \u2192 1",
+    "spawn_agent_tokens_fat_est": "902,524 \u2192 150,391",
+    "batch5_calls": "15 \u2192 1",
+    "batch5_agent_tokens_fat_est": "2,261,185 \u2192 150,388",
+    "note": "Agent token estimates model Cursor cache-read burn per tool turn; wire payload tokens are measured."
+  }
+}
