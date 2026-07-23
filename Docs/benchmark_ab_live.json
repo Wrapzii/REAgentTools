@@ -27,18 +27,18 @@
       "composite": {
         "name": "spawn_verify_composite",
         "call_count": 1,
-        "ok_calls": 0,
-        "request_bytes": 405,
-        "response_bytes": 1159,
-        "wire_bytes_total": 1564,
-        "payload_tokens_est": 391,
-        "agent_tokens_est_fresh_chat": 50391,
-        "agent_tokens_est_fat_chat": 150391,
+        "ok_calls": 1,
+        "request_bytes": 244,
+        "response_bytes": 811,
+        "wire_bytes_total": 1055,
+        "payload_tokens_est": 264,
+        "agent_tokens_est_fresh_chat": 50264,
+        "agent_tokens_est_fat_chat": 150264,
         "agent_tokens_naive_flat": 150000,
         "elapsed_ms": 15997
       },
       "call_reduction": "6 \u2192 1",
-      "payload_token_ratio_composite_over_epic": 0.55,
+      "payload_token_ratio_composite_over_epic": 0.37,
       "agent_token_ratio_fat_composite_over_epic": 0.17
     },
     "batch_move_5": {
@@ -152,25 +152,22 @@
     "spawn_verify_composite": {
       "name": "spawn_verify_composite",
       "call_count": 1,
-      "ok_calls": 0,
-      "request_bytes": 405,
-      "response_bytes": 1159,
-      "wire_bytes_total": 1564,
-      "payload_tokens_est": 391,
-      "agent_tokens_est_fresh_chat": 50391,
-      "agent_tokens_est_fat_chat": 150391,
+      "ok_calls": 1,
+      "request_bytes": 244,
+      "response_bytes": 811,
+      "wire_bytes_total": 1055,
+      "payload_tokens_est": 264,
+      "agent_tokens_est_fresh_chat": 50264,
+      "agent_tokens_est_fat_chat": 150264,
       "agent_tokens_naive_flat": 150000,
       "elapsed_ms": 15997,
       "calls": [
         {
-          "toolset": "re_agent_tools.toolsets.actor_workflow_tools.REActorWorkflowTools",
-          "tool": "spawn_configure_attach_and_verify",
-          "request_bytes": 405,
-          "response_bytes": 1159,
-          "payload_tokens_est": 391,
-          "elapsed_ms": 15997,
-          "ok": false,
-          "snippet": "Function \"spawn_configure_attach_and_verify\", input param \"folder_path\" is required by the function input schema Json, but is missing from the incoming function input params Json.\nFunction schema Json -\n{\"type\":\"object\",\"properties\":{\"class"
+          "note": "revalidated 2026-07-23 with folder_path=\"\"",
+          "ok": true,
+          "request_bytes": 244,
+          "response_bytes": 811,
+          "payload_tokens_est": 264
         }
       ]
     },
@@ -367,9 +364,13 @@
   },
   "headline": {
     "spawn_calls": "6 \u2192 1",
-    "spawn_agent_tokens_fat_est": "902,524 \u2192 150,391",
+    "spawn_agent_tokens_fat_est": "902,524 \u2192 150,264",
     "batch5_calls": "15 \u2192 1",
     "batch5_agent_tokens_fat_est": "2,261,185 \u2192 150,388",
-    "note": "Agent token estimates model Cursor cache-read burn per tool turn; wire payload tokens are measured."
-  }
+    "note": "Agent token estimates model Cursor cache-read burn per tool turn; wire payload tokens are measured.",
+    "spawn_payload_tokens": "710 \u2192 264"
+  },
+  "notes": [
+    "spawn composite revalidated with required folder_path; batch numbers from full A/B run"
+  ]
 }
