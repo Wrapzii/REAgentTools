@@ -18,7 +18,7 @@ from re_agent_tools.common.validation import is_pie_active
 
 
 def _project_root() -> Path:
-    return Path(unreal.Paths.project_dir())
+    return Path(unreal.Paths.project_dir()).resolve()
 
 
 def _shot_dir() -> Path:
@@ -27,34 +27,32 @@ def _shot_dir() -> Path:
     return d
 
 
-def _downscale(path: Path, max_dimension: int, jpeg_quality: int) -> dict:
-    """Downscale in place or to .jpg; returns {path, width, height, bytes}."""
-    info = {
-        "path": str(path).replace("\\", "/"),
-        "width": None,
-        "height": None,
-        "bytes": path.stat().st_size if path.exists() else 0,
-    }
-    if max_dimension <= 0 or not path.exists():
-        return info
+def _norm_path(path: Path) -> str:
+    """Prefer project-relative Saved/... path; else absolute posix."""
     try:
-        from PIL import Image  # type: ignore
+        resolved = path.resolve()
+        root = _project_root().resolve()
+        try:
+            return str(resolved.relative_to(root)).replace("\\", "/")
+        except ValueError:
+            return str(resolved).replace("\\", "/")
     except Exception:
-        info["warning"] = "PIL unavailable — kept original"
-        return info
+        return str(path).replace("\\", "/")
+
+
+def _downscale_with_pil(path: Path, max_dimension: int, jpeg_quality: int) -> dict:
+    from PIL import Image  # type: ignore
+
     im = Image.open(path)
     w, h = im.size
-    info["width"], info["height"] = w, h
     longest = max(w, h)
-    if longest > max_dimension:
+    if max_dimension > 0 and longest > max_dimension:
         scale = max_dimension / float(longest)
         im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
-        info["width"], info["height"] = im.size
     out = path
     if jpeg_quality > 0:
         out = path.with_suffix(".jpg")
-        rgb = im.convert("RGB")
-        rgb.save(out, "JPEG", quality=int(jpeg_quality), optimize=True)
+        im.convert("RGB").save(out, "JPEG", quality=int(jpeg_quality), optimize=True)
         if out != path and path.exists():
             try:
                 path.unlink()
@@ -62,9 +60,80 @@ def _downscale(path: Path, max_dimension: int, jpeg_quality: int) -> dict:
                 pass
     else:
         im.save(out)
-    info["path"] = str(out).replace("\\", "/")
-    info["bytes"] = out.stat().st_size
-    return info
+    return {
+        "path": _norm_path(out),
+        "width": im.size[0],
+        "height": im.size[1],
+        "bytes": out.stat().st_size,
+    }
+
+
+def _downscale(path: Path, max_dimension: int, jpeg_quality: int) -> dict:
+    """Downscale in place or to .jpg; returns {path, width, height, bytes}."""
+    info = {
+        "path": _norm_path(path),
+        "width": None,
+        "height": None,
+        "bytes": path.stat().st_size if path.exists() else 0,
+    }
+    if (max_dimension <= 0 and jpeg_quality <= 0) or not path.exists():
+        return info
+    try:
+        return _downscale_with_pil(path, max_dimension, jpeg_quality)
+    except Exception:
+        pass
+    # Editor Python often has no PIL — shell out to system Python if present
+    try:
+        import subprocess
+        import sys
+
+        script = (
+            "from PIL import Image; import sys; "
+            "p,m,j=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]); "
+            "im=Image.open(p); w,h=im.size; "
+            "m=m if m>0 else max(w,h); "
+            "s=m/float(max(w,h)) if max(w,h)>m else 1.0; "
+            "im=im.resize((max(1,int(w*s)),max(1,int(h*s))), Image.Resampling.LANCZOS) if s<1 else im; "
+            "out=p; "
+            "import os; "
+            "out=(os.path.splitext(p)[0]+'.jpg') if j>0 else p; "
+            "im.convert('RGB').save(out,'JPEG',quality=j,optimize=True) if j>0 else im.save(out); "
+            "print(out); print(im.size[0]); print(im.size[1])"
+        )
+        candidates = [
+            sys.executable,
+            r"C:\Program Files\Python39\python.exe",
+            r"C:\Program Files\Python311\python.exe",
+            r"C:\Program Files\Python312\python.exe",
+            "python",
+        ]
+        for py in candidates:
+            try:
+                proc = subprocess.run(
+                    [py, "-c", script, str(path), str(int(max_dimension)), str(int(jpeg_quality))],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+                if proc.returncode != 0:
+                    continue
+                lines = [ln.strip() for ln in (proc.stdout or "").splitlines() if ln.strip()]
+                if len(lines) >= 3:
+                    out = Path(lines[0])
+                    return {
+                        "path": _norm_path(out),
+                        "width": int(lines[1]),
+                        "height": int(lines[2]),
+                        "bytes": out.stat().st_size if out.exists() else 0,
+                    }
+            except Exception:
+                continue
+        info["warning"] = "PIL unavailable in editor + system Python — kept original"
+        return info
+    except Exception as exc:
+        info["warning"] = f"downscale failed: {exc}"
+        return info
 
 
 def _wait_for_file(path: Path, timeout_s: float = 8.0) -> bool:
@@ -85,15 +154,148 @@ def _wait_for_file(path: Path, timeout_s: float = 8.0) -> bool:
     return path.exists() and path.stat().st_size > 0
 
 
-def _highresshot(path: Path, width: int, height: int) -> None:
+def _newest_screenshot(after_mtime: float) -> Path | None:
+    shot = _shot_dir()
+    newest = None
+    newest_m = after_mtime
+    for p in shot.glob("*.png"):
+        try:
+            m = p.stat().st_mtime
+        except Exception:
+            continue
+        if m > newest_m and (newest is None or m > newest.stat().st_mtime):
+            newest = p
+            newest_m = m
+    return newest
+
+
+def _highresshot(path: Path, width: int, height: int) -> list[str]:
+    """Try several HighResShot filename forms; return attempt notes."""
+    notes: list[str] = []
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         try:
             path.unlink()
         except Exception:
             pass
-    cmd = f'HighResShot {int(width)}x{int(height)} filename="{path.as_posix()}"'
-    unreal.SystemLibrary.execute_console_command(None, cmd)
+    attempts = [
+        f'HighResShot {int(width)}x{int(height)} filename="{path.as_posix()}"',
+        f"HighResShot {int(width)}x{int(height)} filename={path.as_posix()}",
+        f'HighResShot {int(width)}x{int(height)} filename="{path.name}"',
+        f"HighResShot {int(width)}x{int(height)}",
+    ]
+    for cmd in attempts:
+        try:
+            unreal.SystemLibrary.execute_console_command(None, cmd)
+            notes.append(cmd.split(" filename")[0] if " filename" in cmd else cmd)
+            if _wait_for_file(path, timeout_s=2.5):
+                return notes
+            # UE may write under Saved/Screenshots with a generated name
+            found = _newest_screenshot(time.time() - 8.0)
+            if found and found.resolve() != path.resolve():
+                try:
+                    found.replace(path)
+                    notes.append(f"renamed {found.name} → {path.name}")
+                    return notes
+                except Exception as exc:
+                    notes.append(f"rename failed: {exc}")
+        except Exception as exc:
+            notes.append(f"cmd failed: {exc}")
+    return notes
+
+
+def _scenecapture_to_disk(dest: Path, width: int, height: int) -> tuple[bool, list[str]]:
+    """Reliable editor capture via SceneCapture2D + export_render_target (proven in lookdev_scenecapture_shot)."""
+    warnings: list[str] = []
+    eas = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    created: list = []
+    try:
+        try:
+            loc, rot = unreal.EditorLevelLibrary.get_level_viewport_camera_info()
+        except Exception:
+            loc, rot = unreal.Vector(0, 0, 200), unreal.Rotator(-20, 0, 0)
+
+        rt = None
+        try:
+            world = unreal.EditorLevelLibrary.get_editor_world()
+            rt = unreal.RenderingLibrary.create_render_target2d(
+                world, int(width), int(height), unreal.TextureRenderTargetFormat.RTF_RGBA8
+            )
+        except Exception as exc:
+            warnings.append(f"create_render_target2d: {exc}")
+            return False, warnings
+        if not rt:
+            return False, warnings
+
+        for a in list(eas.get_all_level_actors() or []):
+            try:
+                if (a.get_actor_label() or "") == "RE_Capture_SceneCapture":
+                    eas.destroy_actor(a)
+            except Exception:
+                pass
+
+        cap_actor = eas.spawn_actor_from_class(unreal.SceneCapture2D.static_class(), loc)
+        if not cap_actor:
+            return False, ["spawn SceneCapture2D failed"]
+        created.append(cap_actor)
+        cap_actor.set_actor_label("RE_Capture_SceneCapture")
+        cap_actor.set_actor_location(loc, False, True)
+        cap_actor.set_actor_rotation(rot, False)
+
+        sc = cap_actor.get_component_by_class(unreal.SceneCaptureComponent2D)
+        if sc is None:
+            sc = getattr(cap_actor, "capture_component2d", None)
+        if not sc:
+            return False, ["SceneCaptureComponent2D missing"]
+        sc.set_editor_property("texture_target", rt)
+        try:
+            sc.set_editor_property("capture_source", unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR)
+        except Exception:
+            pass
+        try:
+            sc.capture_scene()
+        except Exception as exc:
+            return False, [f"capture_scene: {exc}"]
+
+        time.sleep(0.35)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            try:
+                dest.unlink()
+            except Exception:
+                pass
+        ok = False
+        try:
+            world = unreal.EditorLevelLibrary.get_editor_world()
+            ok = bool(
+                unreal.RenderingLibrary.export_render_target(world, rt, str(dest.parent), dest.name)
+            )
+        except Exception as exc:
+            warnings.append(f"export_render_target: {exc}")
+        if not ok or not dest.exists():
+            # export may write with slight name variance
+            found = _newest_screenshot(time.time() - 5.0)
+            if found and found.stat().st_size > 500:
+                if found.resolve() != dest.resolve():
+                    found.replace(dest)
+                ok = dest.exists()
+        if ok and dest.exists() and dest.stat().st_size > 500:
+            warnings.append("used SceneCapture2D → export_render_target")
+            return True, warnings
+        return False, warnings
+    except Exception as exc:
+        warnings.append(f"scenecapture: {exc}")
+        return False, warnings
+    finally:
+        try:
+            if created:
+                eas.destroy_actors(created)
+        except Exception:
+            try:
+                for a in created:
+                    eas.destroy_actor(a)
+            except Exception:
+                pass
 
 
 def _capture_to_disk(
@@ -104,20 +306,43 @@ def _capture_to_disk(
     jpeg_quality: int,
 ) -> tuple[dict, list[str]]:
     warnings: list[str] = []
-    _highresshot(dest, width, height)
-    ok = _wait_for_file(dest, timeout_s=10.0)
+    # Prefer SceneCapture (HighResShot/Automation often write nothing on UE 5.8)
+    ok, sc_warns = _scenecapture_to_disk(dest, width, height)
+    warnings.extend(sc_warns)
+    notes: list[str] = []
+    if not ok:
+        t_before = time.time()
+        notes = _highresshot(dest, width, height)
+        ok = dest.exists() and dest.stat().st_size > 0
+        if not ok:
+            found = _newest_screenshot(t_before - 1.0)
+            if found:
+                try:
+                    if found.resolve() != dest.resolve():
+                        found.replace(dest)
+                    ok = dest.exists() and dest.stat().st_size > 0
+                    warnings.append(f"picked newest screenshot {dest.name}")
+                except Exception as exc:
+                    warnings.append(f"newest pick failed: {exc}")
     if not ok:
         try:
-            unreal.AutomationLibrary.take_high_res_screenshot(width, height, str(dest), None, False, False)
-            ok = _wait_for_file(dest, timeout_s=8.0)
+            stem = dest.stem
+            unreal.AutomationLibrary.take_high_res_screenshot(width, height, stem, None, False, False)
+            ok = _wait_for_file(dest, timeout_s=4.0)
+            if not ok:
+                cand = _shot_dir() / f"{stem}.png"
+                if cand.exists():
+                    if cand.resolve() != dest.resolve():
+                        cand.replace(dest)
+                    ok = True
             if ok:
                 warnings.append("used AutomationLibrary.take_high_res_screenshot fallback")
         except Exception as exc:
             warnings.append(f"automation fallback: {exc}")
     if not ok or not dest.exists():
         raise RuntimeError(
-            "No screenshot file written (HighResShot/Automation flaky on some builds). "
-            "Outside PIE prefer Content/Python/mcp_capture_viewport_to_disk.py (MCP CaptureViewport → path)."
+            "No screenshot file written. Prefer Content/Python/mcp_capture_viewport_to_disk.py "
+            f"(MCP CaptureViewport → path). attempts={notes[:3]}"
         )
     info = _downscale(dest, int(max_dimension), int(jpeg_quality))
     if info.get("warning"):
