@@ -18,9 +18,47 @@ MCP `toolset_name` prefix: `re_agent_tools.toolsets.<module>.<ClassName>`
 | set_actor_properties_and_verify | actor_label, properties_json, save_level | JSON WorkflowResult |
 | set_component_properties_and_verify | actor_label, component_name, properties_json | JSON WorkflowResult |
 | spawn_configure_attach_and_verify | class_path, location/rotation/scale JSON, properties_json, actor_label, folder_path, attach_parent_label | JSON WorkflowResult |
+| place_from_asset_and_verify | asset_path, actor_label, location/rotation/scale JSON, folder_path | JSON WorkflowResult — StaticMesh / Blueprint / class |
 | batch_transform_actors | transforms_json (list of {label, location?, rotation?, scale?}) | JSON WorkflowResult |
+| rotate_actors_and_verify | rotations_json `[{label, rotation}|{label, add_yaw}]` | JSON WorkflowResult |
 | delete_actors_validated | actor_labels_json, dry_run (default true) | JSON WorkflowResult |
 | organize_actors | organization_json (folder, new_label, tags) | JSON WorkflowResult |
+
+## RENiagaraWorkflowTools (v1.1)
+
+| tool_name | Args | Returns |
+|-----------|------|---------|
+| place_niagara_system_and_verify | system_path, actor_label, loc/rot/scale JSON, folder_path, auto_activate, parameters_json | JSON WorkflowResult |
+| assign_niagara_system_to_component | actor_label, system_path, component_name?, reset_overrides, auto_activate | JSON WorkflowResult |
+| set_niagara_user_parameters_and_verify | actor_label, parameters_json, component_name? | JSON WorkflowResult |
+| inspect_niagara_compact | actor_label, component_name? | JSON compact (no stack dump) |
+
+## REDressWorkflowTools (v1.1)
+
+| tool_name | Args | Returns |
+|-----------|------|---------|
+| place_static_mesh_and_verify | mesh_path, actor_label, loc/rot/scale JSON, folder_path, tags_json | JSON + bounds_cm |
+| batch_place_static_meshes | placements_json, folder_path | JSON WorkflowResult |
+| scatter_static_meshes_ring | mesh_path, label_prefix, center_json, radius_cm, count, scale_json, random_yaw, seed, folder_path, tag | JSON WorkflowResult |
+| snap_actors_to_floor | actor_labels_json, trace_up_cm, trace_down_cm | JSON WorkflowResult |
+
+## RECharacterWorkflowTools (v1.1)
+
+| tool_name | Args | Returns |
+|-----------|------|---------|
+| inspect_character_compact | blueprint_path? (default BP_RECharacter) | mesh + montage summary |
+| set_character_mesh_and_verify | skeletal_mesh_path, blueprint_path?, compile_save | JSON WorkflowResult |
+| set_visual_combat_montages | montages_json, blueprint_path?, compile_save | JSON WorkflowResult |
+| list_mesh_sockets_compact | skeletal_mesh_path? or blueprint_path?, limit | socket name list |
+
+## RELightingWorkflowTools (v1.1)
+
+| tool_name | Args | Returns |
+|-----------|------|---------|
+| get_environment_lights_compact | — | directional / sky / fog / atmosphere labels |
+| list_mood_presets | — | cave_cool, bright_neutral, boss_dim |
+| apply_mood_lighting | mood, create_if_missing | JSON WorkflowResult — edits existing lights |
+| set_light_properties_and_verify | actor_label, properties_json | JSON WorkflowResult |
 
 ## REAnimWorkflowTools
 

@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.0.3",
+	"VersionName": "1.1.0",
 	"FriendlyName": "RE Agent Tools",
 	"Description": "Composite MCP workflow toolsets for the RE project — multi-step editor operations with compact JSON results.",
 	"Category": "Scripting",

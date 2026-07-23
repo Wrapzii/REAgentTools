@@ -284,3 +284,116 @@ class REActorWorkflowTools(unreal.ToolsetDefinition):
         )
         log_tool_call("organize_actors", success=bool(changed), request_id=request_id, duration_ms=timer.elapsed_ms)
         return result
+
+    @toolset_registry.tool_call
+    @staticmethod
+    def place_from_asset_and_verify(
+        asset_path: str,
+        actor_label: str,
+        location_json: str = "[0,0,0]",
+        rotation_json: str = "[0,0,0]",
+        scale_json: str = "[1,1,1]",
+        folder_path: str = "",
+    ) -> str:
+        """Place actor from StaticMesh / Blueprint / class-like asset path + verify transform."""
+        timer = WorkflowTimer()
+        request_id = make_request_id()
+        try:
+            loc = parse_json(location_json, field_name="location")
+            rot = parse_json(rotation_json, field_name="rotation")
+            sc = parse_json(scale_json, field_name="scale")
+            asset = unreal.load_asset(asset_path)
+            if not asset:
+                raise ValueError(f"Asset not found: {asset_path}")
+            with scoped_transaction(f"RE place asset {actor_label}"):
+                if isinstance(asset, unreal.StaticMesh):
+                    cls = unreal.load_class(None, "/Script/Engine.StaticMeshActor")
+                    actor = spawn_actor_from_class(
+                        cls, vector_from_list(loc), rotator_from_list(rot), vector_from_list(sc)
+                    )
+                    actor.static_mesh_component.set_static_mesh(asset)
+                elif isinstance(asset, unreal.Blueprint):
+                    gen = asset.generated_class()
+                    if not gen:
+                        raise RuntimeError("Blueprint has no generated class")
+                    actor = spawn_actor_from_class(
+                        gen, vector_from_list(loc), rotator_from_list(rot), vector_from_list(sc)
+                    )
+                else:
+                    # Try as actor class path via load_class
+                    cls = unreal.load_class(None, asset_path)
+                    if not cls:
+                        raise ValueError(f"Unsupported asset type for place: {asset.get_class().get_name()}")
+                    actor = spawn_actor_from_class(
+                        cls, vector_from_list(loc), rotator_from_list(rot), vector_from_list(sc)
+                    )
+                actor.set_actor_label(actor_label)
+                if folder_path:
+                    actor.set_folder_path(unreal.Name(folder_path))
+            t = actor.get_actor_location()
+            result = workflow_result(
+                "place_from_asset_and_verify",
+                True,
+                f"Placed {actor_label}",
+                request_id=request_id,
+                created=[actor_label],
+                resolved_targets=[actor_ref(actor)],
+                extra={
+                    "asset": asset_path,
+                    "location": [t.x, t.y, t.z],
+                },
+                duration_ms=timer.elapsed_ms,
+            )
+            log_tool_call("place_from_asset_and_verify", success=True, request_id=request_id, duration_ms=timer.elapsed_ms)
+            return result
+        except (ResolutionError, ValueError, RuntimeError) as exc:
+            return error_result(
+                "place_from_asset_and_verify", str(exc), request_id=request_id, duration_ms=timer.elapsed_ms
+            )
+
+    @toolset_registry.tool_call
+    @staticmethod
+    def rotate_actors_and_verify(rotations_json: str) -> str:
+        """Batch rotate: [{label, rotation:[pitch,yaw,roll]} or {label, add_yaw:deg}]."""
+        timer = WorkflowTimer()
+        request_id = make_request_id()
+        items = parse_json_list(rotations_json, field_name="rotations_json")
+        changed: list[str] = []
+        errors: list[str] = []
+        with scoped_transaction("RE rotate actors"):
+            for entry in items[: limits.MUTATE_LIMIT]:
+                if not isinstance(entry, dict):
+                    errors.append(f"Invalid: {entry}")
+                    continue
+                label = str(entry.get("label") or entry.get("actor_label") or entry.get("name") or "")
+                if not label:
+                    errors.append(f"Missing label: {entry}")
+                    continue
+                try:
+                    actor = resolve_actor(label)
+                    require_editable(actor)
+                    if "rotation" in entry:
+                        rot = entry["rotation"]
+                        actor.set_actor_rotation(unreal.Rotator(rot[0], rot[1], rot[2]), False)
+                    elif "add_yaw" in entry:
+                        cur = actor.get_actor_rotation()
+                        actor.set_actor_rotation(
+                            unreal.Rotator(cur.pitch, cur.yaw + float(entry["add_yaw"]), cur.roll),
+                            False,
+                        )
+                    else:
+                        raise ValueError("need rotation or add_yaw")
+                    changed.append(label)
+                except (ResolutionError, ValueError, RuntimeError) as exc:
+                    errors.append(str(exc))
+        result = workflow_result(
+            "rotate_actors_and_verify",
+            bool(changed),
+            f"Rotated {len(changed)} actors",
+            request_id=request_id,
+            changed=changed,
+            errors=errors,
+            duration_ms=timer.elapsed_ms,
+        )
+        log_tool_call("rotate_actors_and_verify", success=bool(changed), request_id=request_id, duration_ms=timer.elapsed_ms)
+        return result

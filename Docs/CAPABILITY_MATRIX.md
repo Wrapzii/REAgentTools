@@ -83,18 +83,22 @@ Legend: ✅ Implemented | 🔶 Partial | ❌ Missing / use Epic low-level | 🚫
 | Enemy AI / spawners | 🚫 | **Project architecture missing** |
 | Dungeon proc-gen | 🚫 | Manual craft + `re-voxel-world` only |
 | Inventory | 🔶 | `re_inventory_bplibrary` bridge exists; no REAgentTools wrapper yet |
-| Niagara authoring | 🚫 | **Not implemented yet** — next high-value toolset candidate (`RENiagaraWorkflowTools`) |
+| Niagara place / assign / user params | ✅ | `RENiagaraWorkflowTools` (v1.1) — not full module-graph DSL |
+| Cave / level dress place+scatter | ✅ | `REDressWorkflowTools` (v1.1) |
+| Character mesh / combat montages | ✅ | `RECharacterWorkflowTools` (v1.1) |
+| Mood lighting | ✅ | `RELightingWorkflowTools` (v1.1) |
 | Animation / montage | ✅ | `REAnimWorkflowTools` — Control Rig pose timeline → AnimSequence + Montage |
 
-## Recommended next toolsets (priority)
+## Recommended next toolsets (Wave 2)
 
 | Toolset | Why |
 |---------|-----|
-| **`RENiagaraWorkflowTools`** | Circles, bolts, trails — RE already has many NS assets; agents currently chain Epic Niagara tools or RC. Composites: set system on component + verify, tune user params + save, spawn preview actor, compact emitter/param inspect. |
-| `REInventoryWorkflowTools` | Thin wrapper over existing `re_inventory_*` Python — set counts, refresh UI, compact dump (game-specific). |
-| `REVoxelWorkflowTools` | Optional later — carve/dig helpers are project scripts today; only wrap if MCP call count hurts. |
+| `REPCGWorkflowTools` | Spawn graph instance + set params + regenerate for boss dress |
+| `REInventoryWorkflowTools` | Wrap `re_inventory_*` for dig→loot proofs |
+| `REPhysicsWorkflowTools` | Collision profile / simulate toggles (not PhysicsAsset editor) |
+| `RECaptureWorkflowTools` | Budget-safe viewport capture → path only |
 
-**Still out of scope until architecture exists:** GAS ability authoring, enemy AI systems, full Niagara graph node editing (param/tune/assign first; not a Niagara node DSL).
+**Still out of scope:** GAS ability graph authoring; full Niagara module-graph DSL; landscape brush sculpt.
 
 ## When to use Epic vs RE
 
