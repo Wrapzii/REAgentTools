@@ -1,0 +1,20 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0.3",
+	"FriendlyName": "RE Agent Tools",
+	"Description": "Composite MCP workflow toolsets for the RE project — multi-step editor operations with compact JSON results.",
+	"Category": "Scripting",
+	"CreatedBy": "RE Project",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": true,
+	"EditorOnly": true,
+	"EnabledByDefault": true,
+	"Plugins": [
+		{
+			"Name": "ToolsetRegistry",
+			"Enabled": true
+		}
+	]
+}

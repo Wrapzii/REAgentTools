@@ -1,0 +1,10 @@
+Binaries/
+Intermediate/
+Saved/
+*.pyc
+__pycache__/
+.DS_Store
+Thumbs.db
+*.sln
+*.suo
+.vs/
