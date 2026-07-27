@@ -293,6 +293,43 @@ def run_request(request: dict[str, Any]) -> str:
     )
 
 
+RESULT_BEGIN = "REAGENT_RC_RESULT_BEGIN"
+RESULT_END = "REAGENT_RC_RESULT_END"
+
+
+def oneshot_python(request: dict[str, Any]) -> str:
+    """Return a single Python snippet: run request + print marked JSON result.
+
+    Designed for ONE Cursor tool call via host `_rc_exec.py` / Unreal
+    `ExecutePythonCommand` — no separate write/read of rc_request.json.
+    """
+    payload = dumps_compact(request)
+    # Triple-quoted JSON is safe: dumps_compact uses double quotes only.
+    return (
+        "import json\n"
+        "from re_agent_tools import rc_bridge\n"
+        f"_req = json.loads({payload!r})\n"
+        "_out = rc_bridge.run_request(_req)\n"
+        "_, _resp = rc_bridge.request_paths()\n"
+        "open(_resp, 'w', encoding='utf-8').write(_out + '\\n')\n"
+        f"print({RESULT_BEGIN!r})\n"
+        "print(_out)\n"
+        f"print({RESULT_END!r})\n"
+    )
+
+
+def extract_oneshot_result(text: str) -> str | None:
+    """Pull JSON between RESULT_BEGIN/END markers from RC log/stdout."""
+    if not text:
+        return None
+    start = text.find(RESULT_BEGIN)
+    end = text.find(RESULT_END)
+    if start < 0 or end < 0 or end <= start:
+        return None
+    body = text[start + len(RESULT_BEGIN) : end].strip()
+    return body or None
+
+
 def _project_saved_dir() -> str:
     try:
         import unreal

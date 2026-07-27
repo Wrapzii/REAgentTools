@@ -1,14 +1,15 @@
-# Remote Control + REAgentTools (MCP preferred, RC bridge required fallback)
+# Remote Control + REAgentTools (MCP preferred, RC one-shot fallback)
 
 When Unreal editor work is needed:
 
-1. **Prefer MCP** when `mcp-unreal` is ready (`GetMcpTools` → tools present). Call RE*WorkflowTools composites (`get_editor_context`, `execute_editor_batch`, etc.).
-2. **If `mcp-unreal` has `serverStatus: error` / loading forever / no tools** (common in Cursor Remote Control / Agents Window — local MCP often fails live discovery even though Unreal is up):
+1. **Prefer MCP** when `mcp-unreal` is ready. Call RE*WorkflowTools composites.
+2. **If `mcp-unreal` has `serverStatus: error` / loading / no tools** (common in Cursor Remote Control):
    - Do **NOT** say "REAgentTools aren't reachable."
    - Do **NOT** fall back to Epic `SceneTools` / `ActorTools` / `ObjectTools`.
    - Do **NOT** invent ad-hoc `_rc_exec.py` one-shots for work RE composites cover.
-   - Use the **RC bridge**: write `Saved/REAgentTools/rc_request.json`, run `Content/Python/_rc_reagent_exec.py` via Unreal Remote Control (`127.0.0.1:30010`) or editor `py`, read `Saved/REAgentTools/rc_response.json`.
-3. Trivia pushback still applies — don't burn a round-trip for "what level?" unless the user wants real work.
-4. On failure: one RE retry (same composite / `execute_editor_batch` with `recovery.suggested_ops`), then STOP.
+   - Use skill **`reagent-rc-oneshot`**: ONE RC/Python exec via `rc_bridge.oneshot_python({...})`, parse `REAGENT_RC_RESULT_BEGIN`…`END`. (~1 Cursor round-trip, same ballpark as one MCP call.)
+   - File protocol (`rc_request.json` → run → `rc_response.json`) is a 3-hop fallback only if stdout/log capture is unavailable.
+3. Trivia pushback still applies.
+4. On failure: one RE retry, then STOP.
 
-See `Docs/REMOTE_CONTROL_MCP.md` and `Docs/AGENT_DEFAULTS.md`.
+See `Docs/REMOTE_CONTROL_MCP.md` and `.cursor/skills/reagent-rc-oneshot/SKILL.md`.

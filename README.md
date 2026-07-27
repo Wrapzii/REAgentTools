@@ -64,4 +64,4 @@ Tool calls append to `Saved/REAgentTools/tool_calls.jsonl`.
 
 ## Agent preference
 
-Prefer **RE*WorkflowTools** composites before chaining low-level Epic tools. See `Content/RE/UNREAL_MCP_TOOL_MAP.md` and `.cursor/rules/re-agent-tools.mdc`. When MCP is down in Remote Control, call the same composites via `Content/Python/_rc_reagent_exec.py`.
+Prefer **RE*WorkflowTools** composites before chaining low-level Epic tools. See `Content/RE/UNREAL_MCP_TOOL_MAP.md` and `.cursor/rules/re-agent-tools.mdc`. When MCP is down in Remote Control, use skill `reagent-rc-oneshot` (`rc_bridge.oneshot_python`) — one RC exec, not three file hops.

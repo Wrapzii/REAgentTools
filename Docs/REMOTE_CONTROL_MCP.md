@@ -9,7 +9,7 @@ Agents in **Cursor Remote Control / Agents Window / mobile cloud** often report:
 
 **Local Editor Agent/Chat** usually sees `mcp-unreal` fine. Remote sessions assemble MCP tools differently.
 
-This is a **Cursor session / MCP routing limitation**, not a missing plugin. REAgentTools still register inside the editor; MCP is only one transport.
+This is a **Cursor session / MCP routing limitation**, not a missing plugin. REAgentTools still register in-editor; MCP is only one transport.
 
 ### Cursor facts (product)
 
@@ -30,68 +30,65 @@ Staff guidance (forum): until Remote Control MCP parity lands, Editor Agent/Chat
 4. Toggle MCP off/on or start a fresh agent if discovery stuck on `loading`/`error`.
 5. For guaranteed Unreal tool use today: use **Editor** Agent/Chat (not Remote Control), or the RC bridge below.
 
-## Fix the agent side (this plugin) — RC bridge
-
-When MCP discovery fails but Unreal Remote Control works, agents **must** call RE composites via:
+## Fix the agent side — RC bridge (prefer one-shot)
 
 | File | Role |
 |------|------|
-| `Content/Python/re_agent_tools/rc_bridge.py` | `call_tool` / `run_request` / file I/O |
+| `Content/Python/re_agent_tools/rc_bridge.py` | `call_tool` / `run_request` / `oneshot_python` |
 | `Content/Python/_rc_reagent_exec.py` | RC / `py` entrypoint |
+| `.cursor/skills/reagent-rc-oneshot/SKILL.md` | Agent procedure for one Cursor turn |
 
-### Protocol
+### Preferred protocol — one Cursor tool call
 
-1. Write `Saved/REAgentTools/rc_request.json`:
+Execute a single Python block via host `_rc_exec.py` / Unreal `ExecutePythonCommand`:
 
-```json
-{
-  "action": "call",
-  "toolset": "REContextTools",
-  "tool": "get_editor_context",
-  "arguments": {
-    "include_level": true,
-    "include_selection": true,
-    "include_pie": true,
-    "include_dirty": true
-  }
-}
+```python
+from re_agent_tools.rc_bridge import oneshot_python
+exec(oneshot_python({
+    "action": "call",
+    "toolset": "REContextTools",
+    "tool": "get_editor_context",
+    "arguments": {
+        "include_level": True,
+        "include_selection": True,
+        "include_pie": True,
+        "include_dirty": True,
+    },
+}))
 ```
 
-2. Execute via Unreal Remote Control `ExecutePythonCommand` or console:
+Parse log/stdout between:
 
 ```text
-py "…/Plugins/REAgentTools/Content/Python/_rc_reagent_exec.py"
+REAGENT_RC_RESULT_BEGIN
+{...compact WorkflowResult...}
+REAGENT_RC_RESULT_END
 ```
 
-3. Read `Saved/REAgentTools/rc_response.json` (same compact `WorkflowResult` JSON as MCP).
+**Token cost:** ~1 Cursor round-trip — same ballpark as one MCP `CallMcpTool`. Not a free path; just not 3× worse.
 
-Other actions: `{"action":"list_toolsets"}`, `{"action":"list_tools","toolset":"REBatchWorkflowTools"}`.
+Batch / list examples live in the skill. Same composites as MCP; only the transport differs.
 
-Batch example:
+### Fallback protocol — file hop (avoid)
 
-```json
-{
-  "action": "call",
-  "toolset": "REBatchWorkflowTools",
-  "tool": "execute_editor_batch",
-  "arguments": {
-    "dry_run": false,
-    "stop_on_error": true,
-    "operations_json": "[{\"id\":\"c1\",\"action\":\"get_editor_context\"}]"
-  }
-}
-```
+Only if your RC wrapper cannot return log/stdout:
+
+1. Write `Saved/REAgentTools/rc_request.json`
+2. Run `_rc_reagent_exec.py`
+3. Read `Saved/REAgentTools/rc_response.json`
+
+That is **3** Cursor turns for one composite — worse token burn than MCP.
 
 ## Agent policy (non-negotiable)
 
 | Situation | Do | Don’t |
 |-----------|----|-------|
 | `mcp-unreal` ready | Call RE*WorkflowTools via MCP | Chain Epic one-shots |
-| MCP `error` / no tools, RC `:30010` up | `_rc_reagent_exec.py` / `rc_bridge` | Claim composites unreachable; Epic fallback; random RC scripts |
+| MCP `error` / no tools, RC up | `oneshot_python` / skill `reagent-rc-oneshot` | Claim composites unreachable; Epic fallback; random RC scripts |
 | RE call fails | One RE retry from `recovery`, then STOP | Open Epic manual mode |
 
-## Verify
+## Verify (on a machine with Unreal — not cloud CI)
 
 - Editor log: `[REAgentTools] Workflow toolsets registered`
 - MCP path: Cursor lists `re_agent_tools.toolsets.*`
-- RC path: `list_toolsets` via `_rc_reagent_exec.py` returns all 15 toolsets
+- RC one-shot: `oneshot_python({"action":"list_toolsets"})` returns all 15 toolsets between markers
