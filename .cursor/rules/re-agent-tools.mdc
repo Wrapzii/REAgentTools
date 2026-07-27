@@ -1,3 +1,8 @@
+---
+description: REAgentTools MCP-first workflow and Remote Control oneshot fallback when mcp-unreal discovery fails
+alwaysApply: true
+---
+
 # Remote Control + REAgentTools (MCP preferred, RC one-shot fallback)
 
 When Unreal editor work is needed:
@@ -12,4 +17,4 @@ When Unreal editor work is needed:
 3. Trivia pushback still applies.
 4. On failure: one RE retry, then STOP.
 
-See `Docs/REMOTE_CONTROL_MCP.md` and `.cursor/skills/reagent-rc-oneshot/SKILL.md`.
+Read if needed: `Docs/AGENT_DEFAULTS.md`, `Docs/REMOTE_CONTROL_MCP.md`, `.cursor/skills/reagent-rc-oneshot/SKILL.md`.

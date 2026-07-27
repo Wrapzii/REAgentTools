@@ -1,6 +1,7 @@
 # Agent defaults — REAgentTools first (sample)
 
 **Audience:** Cursor / MCP agents working in an Unreal project that has this plugin.  
+**New chat:** also open [`AGENTS.md`](../AGENTS.md) and skill `reagent-rc-oneshot` if `mcp-unreal` is down.  
 **Goal:** Cut token burn. Every tool round-trip re-reads ~the full chat prefix (~150–200k counted tokens, mostly cache). Trivial “just checking” calls are not free.
 
 ---
@@ -104,9 +105,10 @@ Keep this light — prefer one rule, not a new skill:
 
 | Artifact | Role |
 |----------|------|
-| `.cursor/rules/re-agent-tools.mdc` | Attach-on-need: trivia pushback + RE-first + RC bridge |
+| `AGENTS.md` | New-chat bootstrap (transport table + oneshot copy/paste) |
+| `.cursor/rules/re-context-budget.mdc` | Always-on one-liner pointing at RE composites + RC skill |
+| `.cursor/rules/re-agent-tools.mdc` | Always-on: trivia pushback + RE-first + RC oneshot |
 | `.cursor/skills/reagent-rc-oneshot/SKILL.md` | One-shot RC transport when MCP discovery fails |
-| `.cursor/rules/re-context-budget.mdc` | Always-on one-liner pointing at RE composites |
 | `Content/RE/UNREAL_MCP_TOOL_MAP.md` | Signatures; RE section before Epic chains |
 | `Docs/REMOTE_CONTROL_MCP.md` | Why Remote Control loses MCP + RC bridge protocol |
 | This file (`Docs/AGENT_DEFAULTS.md`) | Human + agent sample (canonical in this repo) |

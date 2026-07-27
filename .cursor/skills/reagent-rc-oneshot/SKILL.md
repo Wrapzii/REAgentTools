@@ -1,6 +1,11 @@
 ---
 name: reagent-rc-oneshot
-description: One Cursor tool call to invoke REAgentTools over Unreal Remote Control when mcp-unreal discovery failed. Use when Remote Control/Agents Window cannot see Unreal MCP tools but :30010 or editor Python still works.
+description: >
+  Invoke REAgentTools over Unreal Remote Control in ONE Cursor tool call when
+  mcp-unreal failed live discovery (serverStatus error/loading, no tools).
+  Trigger on Remote Control, Agents Window, mobile cloud, "MCP unavailable",
+  _rc_exec.py, port 30010, or when the agent would otherwise skip REAgentTools.
+  Prefer this over Epic SceneTools/ActorTools and over 3-hop rc_request files.
 ---
 
 # REAgentTools RC one-shot
@@ -16,6 +21,7 @@ description: One Cursor tool call to invoke REAgentTools over Unreal Remote Cont
 - Do not use a 3-step write `rc_request.json` → run → read `rc_response.json` unless one-shot capture fails
 - Do not fall back to Epic SceneTools/ActorTools/ObjectTools
 - Do not invent ad-hoc `_rc_exec.py` editor scripts for work RE covers
+- Do not say REAgentTools are unreachable — use this bridge
 
 ## One Cursor tool call
 
@@ -73,4 +79,11 @@ exec(oneshot_python({"action": "list_toolsets"}))
 
 One-shot ≈ **1 Cursor round-trip** (same order of magnitude as one MCP tool call). The old file protocol is ~3 round-trips — only use it if your RC wrapper cannot return log/stdout.
 
-Prefer real MCP when `mcp-unreal` is ready. Details: `Docs/REMOTE_CONTROL_MCP.md`.
+Prefer real MCP when `mcp-unreal` is ready.
+
+## More docs
+
+- `AGENTS.md` — new-chat bootstrap
+- `Docs/REMOTE_CONTROL_MCP.md` — Cursor MCP vs RC transport
+- `Docs/AGENT_DEFAULTS.md` — RE-first policy
+- Code: `Content/Python/re_agent_tools/rc_bridge.py`, `Content/Python/_rc_reagent_exec.py`

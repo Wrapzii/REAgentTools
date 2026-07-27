@@ -1,0 +1,11 @@
+---
+description: REAgentTools burn control — prefer composites; RC oneshot if mcp-unreal fails
+alwaysApply: true
+---
+
+# REAgentTools (always)
+
+- Prefer `RE*WorkflowTools` (`get_editor_context` / `execute_editor_batch`) over Epic Scene/Actor/Object one-shots.
+- Trivia (“what level?”) → push back before any Unreal tool call.
+- If `mcp-unreal` is error/loading/empty (common in Cursor Remote Control): load skill **`reagent-rc-oneshot`** and call `rc_bridge.oneshot_python({...})` in ONE RC exec. Do not claim REAgentTools unreachable. Do not invent `_rc_exec` Epic scripts.
+- Canonical docs: `Docs/AGENT_DEFAULTS.md`, `Docs/REMOTE_CONTROL_MCP.md`, `AGENTS.md`.

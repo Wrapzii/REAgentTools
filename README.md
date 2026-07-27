@@ -2,7 +2,7 @@
 
 Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step editor operations (spawn + configure + verify, batch transforms, asset bulk edit) into single tool calls that return **compact JSON strings** — reducing MCP round-trips vs chaining Epic `SceneTools` / `ObjectTools` / `ActorTools`.
 
-**Agents:** read [`Docs/AGENT_DEFAULTS.md`](Docs/AGENT_DEFAULTS.md) — push back on trivia tool burns; always prefer REAgentTools (`get_editor_context` / `execute_editor_batch`) over Epic one-shots. If Cursor Remote Control fails `mcp-unreal` discovery, use the [RC bridge](Docs/REMOTE_CONTROL_MCP.md) (`_rc_reagent_exec.py`) — composites are still reachable.
+**Agents (new chat):** start at [`AGENTS.md`](AGENTS.md) → [`Docs/AGENT_DEFAULTS.md`](Docs/AGENT_DEFAULTS.md). Prefer REAgentTools over Epic one-shots. If Cursor Remote Control fails `mcp-unreal` discovery, use skill **`reagent-rc-oneshot`** ([docs](Docs/REMOTE_CONTROL_MCP.md)) — one RC exec via `oneshot_python`, not three file hops.
 
 ## Requirements
 
@@ -39,7 +39,8 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 
 ## Docs
 
-- [REMOTE_CONTROL_MCP.md](Docs/REMOTE_CONTROL_MCP.md) — Cursor Remote Control MCP failures + RC bridge
+- [AGENTS.md](AGENTS.md) — new-chat bootstrap for Cursor agents
+- [REMOTE_CONTROL_MCP.md](Docs/REMOTE_CONTROL_MCP.md) — Cursor Remote Control MCP failures + RC oneshot bridge
 - [VISUAL_LOOP.md](Docs/VISUAL_LOOP.md) — Epic Logs/LiveCoding/Slate vs RECapture
 - [EXPAND_PLAN.md](Docs/EXPAND_PLAN.md) — research + wave roadmap
 - [CAPABILITY_MATRIX.md](Docs/CAPABILITY_MATRIX.md) — supported vs missing

@@ -34,9 +34,12 @@ Staff guidance (forum): until Remote Control MCP parity lands, Editor Agent/Chat
 
 | File | Role |
 |------|------|
+| `AGENTS.md` | New-chat bootstrap |
 | `Content/Python/re_agent_tools/rc_bridge.py` | `call_tool` / `run_request` / `oneshot_python` |
 | `Content/Python/_rc_reagent_exec.py` | RC / `py` entrypoint |
 | `.cursor/skills/reagent-rc-oneshot/SKILL.md` | Agent procedure for one Cursor turn |
+| `.cursor/rules/re-context-budget.mdc` | Always-on pointer |
+| `.cursor/rules/re-agent-tools.mdc` | Always-on RE + RC policy |
 
 ### Preferred protocol — one Cursor tool call
 

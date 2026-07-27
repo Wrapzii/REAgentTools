@@ -1,6 +1,6 @@
 # REAgentTools — Usage Guide
 
-**Start here for agents:** [`AGENT_DEFAULTS.md`](./AGENT_DEFAULTS.md) — trivia pushback, RE-first, no Epic manual fallback.
+**Start here for agents:** [`../AGENTS.md`](../AGENTS.md) then [`AGENT_DEFAULTS.md`](./AGENT_DEFAULTS.md) — trivia pushback, RE-first, no Epic manual fallback. Remote Control MCP down? skill `reagent-rc-oneshot`.
 
 ## Refresh after install
 
