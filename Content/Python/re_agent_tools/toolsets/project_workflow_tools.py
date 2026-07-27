@@ -77,14 +77,15 @@ class REProjectWorkflowTools(unreal.ToolsetDefinition):
                 "Enemy AI framework — no standardized enemy BP hierarchy",
                 "Dungeon procedural generator — manual level craft + voxel caves only",
             ],
-            "supported_via_epic_low_level": [
-                "SceneTools.find_actors",
-                "ObjectTools.get_properties / set_properties",
-                "ActorTools transforms and labels",
-            ],
+            "forbid_epic_manual_fallback": True,
+            "on_composite_failure": (
+                "Retry ONCE via REAgentTools only (execute_editor_batch / same composite). "
+                "Never chain Epic SceneTools/ActorTools/ObjectTools — that burns tokens."
+            ),
             "use_reagenttools_for": [
                 "Multi-step spawn + configure + verify",
-                "Batch transforms in one transaction",
+                "Batch transforms in one transaction (execute_editor_batch)",
+                "In-batch find_actors / get_editor_context (no Epic discovery)",
                 "Asset find + bulk edit + save",
                 "Blueprint create/defaults/compile chains",
                 "Material instance create + assign",

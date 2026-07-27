@@ -10,16 +10,25 @@ from re_agent_tools.common.limits import SEARCH_LIMIT, truncate_list
 
 
 class ResolutionError(ValueError):
-    """Base resolution failure."""
+    """Base resolution failure. May carry compact candidates for batch retry."""
+
+    def __init__(self, message: str, *, candidates: list[dict[str, str]] | None = None):
+        self.candidates = list(candidates or [])
+        super().__init__(message)
 
 
 class AmbiguousResolutionError(ResolutionError):
     def __init__(self, kind: str, query: str, candidates: list[dict[str, str]]):
         self.kind = kind
         self.query = query
-        self.candidates = candidates
+        labels = [c.get("label") or c.get("path", "?") for c in candidates[:8]]
         super().__init__(
-            f"Ambiguous {kind} query {query!r}: {len(candidates)} matches"
+            (
+                f"Ambiguous {kind} query {query!r}: {len(candidates)} matches; "
+                f"candidates={labels}. Retry execute_editor_batch with an exact "
+                f"label — DO NOT use Epic SceneTools.find_actors."
+            ),
+            candidates=candidates,
         )
 
 
@@ -44,6 +53,69 @@ def asset_ref(path: str) -> dict[str, str]:
     asset = unreal.load_asset(path)
     cls = asset.get_class().get_name() if asset else "Unknown"
     return {"kind": "asset", "path": path, "class": cls}
+
+
+def _token_score(query: str, label: str, class_name: str) -> int:
+    """Cheap overlap score for soft suggestions (no fuzzy lib)."""
+    q = query.lower().replace("_", " ").replace("-", " ")
+    tokens = [t for t in q.split() if t]
+    if not tokens:
+        return 0
+    hay = f"{label} {class_name}".lower()
+    score = 0
+    for t in tokens:
+        if t in hay:
+            score += 2
+        if t in label.lower():
+            score += 1
+        if t in class_name.lower():
+            score += 2
+    return score
+
+
+def suggest_actors(query: str, *, limit: int = 10) -> list[dict[str, str]]:
+    """Compact nearby actor suggestions for recovery payloads (no Epic MCP)."""
+    query = (query or "").strip()
+    if not query:
+        return []
+    scored: list[tuple[int, unreal.Actor]] = []
+    for actor in _eas().get_all_level_actors():
+        label = actor.get_actor_label()
+        cls = actor.get_class().get_name()
+        score = _token_score(query, label, cls)
+        if score <= 0:
+            # still allow class-name substring for PlayerStart-style queries
+            q_lower = query.lower()
+            if q_lower in label.lower() or q_lower in cls.lower() or q_lower in actor.get_path_name().lower():
+                score = 1
+        if score > 0:
+            scored.append((score, actor))
+    scored.sort(key=lambda x: (-x[0], x[1].get_actor_label()))
+    return [actor_ref(a) for _, a in scored[:limit]]
+
+
+def find_actors_compact(
+    *,
+    name: str = "",
+    class_name: str = "",
+    limit: int = SEARCH_LIMIT,
+) -> list[dict[str, str]]:
+    """In-plugin actor search — replaces Epic SceneTools.find_actors for agents."""
+    name_l = name.strip().lower()
+    class_l = class_name.strip().lower()
+    hits: list[unreal.Actor] = []
+    for actor in _eas().get_all_level_actors():
+        label = actor.get_actor_label()
+        cls = actor.get_class().get_name()
+        if name_l and name_l not in label.lower() and name_l not in actor.get_path_name().lower():
+            continue
+        if class_l and class_l not in cls.lower():
+            continue
+        if not name_l and not class_l:
+            continue
+        hits.append(actor)
+    items, _, _ = truncate_list(hits, limit, label="actors")
+    return [actor_ref(a) for a in items]
 
 
 def resolve_actor(query: str) -> unreal.Actor:
@@ -74,11 +146,60 @@ def resolve_actor(query: str) -> unreal.Actor:
             raise AmbiguousResolutionError(
                 "actor", query, [actor_ref(a) for a in path_matches[:SEARCH_LIMIT]]
             )
-        raise ResolutionError(f"No actor matched {query!r}")
+        # class-name unique match (PlayerStart / GAME_PlayerStart drift)
+        class_matches = [a for a in actors if q_lower in a.get_class().get_name().lower()]
+        if len(class_matches) == 1:
+            return class_matches[0]
+        suggestions = suggest_actors(query, limit=SEARCH_LIMIT)
+        if len(class_matches) > 1:
+            raise AmbiguousResolutionError(
+                "actor",
+                query,
+                [actor_ref(a) for a in class_matches[:SEARCH_LIMIT]],
+            )
+        raise ResolutionError(
+            (
+                f"No actor matched {query!r}. candidates="
+                f"{[c.get('label') for c in suggestions[:8]]}. "
+                "Retry execute_editor_batch with find_actors or an exact label "
+                "from candidates — DO NOT use Epic SceneTools.find_actors."
+            ),
+            candidates=suggestions,
+        )
 
     raise AmbiguousResolutionError(
         "actor", query, [actor_ref(a) for a in partial[:SEARCH_LIMIT]]
     )
+
+
+def resolve_actor_soft(query: str) -> tuple[unreal.Actor, list[str]]:
+    """Resolve with unique soft fallbacks; return (actor, warnings)."""
+    warnings: list[str] = []
+    try:
+        return resolve_actor(query), warnings
+    except AmbiguousResolutionError:
+        raise
+    except ResolutionError as exc:
+        # Last-chance: unique class token if query has an UnderscoredClass-like token
+        tokens = [t for t in query.replace("-", "_").split("_") if len(t) >= 4]
+        actors = _eas().get_all_level_actors()
+        for token in reversed(tokens):
+            t_lower = token.lower()
+            class_hits = [a for a in actors if a.get_class().get_name().lower() == t_lower]
+            if len(class_hits) == 1:
+                warnings.append(
+                    f"Soft-resolved {query!r} via unique class {token!r} → "
+                    f"{class_hits[0].get_actor_label()!r}"
+                )
+                return class_hits[0], warnings
+            label_hits = [a for a in actors if t_lower in a.get_actor_label().lower()]
+            if len(label_hits) == 1:
+                warnings.append(
+                    f"Soft-resolved {query!r} via unique token {token!r} → "
+                    f"{label_hits[0].get_actor_label()!r}"
+                )
+                return label_hits[0], warnings
+        raise exc
 
 
 def resolve_actors(queries: list[str], *, limit: int = SEARCH_LIMIT) -> list[unreal.Actor]:

@@ -34,7 +34,7 @@ class REContextTools(unreal.ToolsetDefinition):
         request_id = make_request_id()
         caps = {
             "plugin": "REAgentTools",
-            "version": "1.2.0",
+            "version": "1.2.1",
             "toolsets": [
                 "REContextTools",
                 "REActorWorkflowTools",
@@ -57,6 +57,11 @@ class REContextTools(unreal.ToolsetDefinition):
                 "mutate": limits.MUTATE_LIMIT,
                 "batch": limits.BATCH_LIMIT,
             },
+            "forbid_epic_manual_fallback": True,
+            "on_failure": (
+                "Retry ONCE via REAgentTools only "
+                "(execute_editor_batch / same composite). Never Epic one-by-one."
+            ),
         }
         result = workflow_result(
             "get_plugin_capabilities",
@@ -138,7 +143,7 @@ class REContextTools(unreal.ToolsetDefinition):
         actor_queries_json: str = "[]",
         asset_paths_json: str = "[]",
     ) -> str:
-        """Resolve actors by label/path and assets by path. Ambiguous → error with candidates."""
+        """Resolve actors by label/path and assets by path. On failure: candidates in recovery — retry via execute_editor_batch, never Epic find_actors."""
         timer = WorkflowTimer()
         request_id = make_request_id()
         try:
@@ -159,8 +164,20 @@ class REContextTools(unreal.ToolsetDefinition):
             return result
         except (ResolutionError, AmbiguousResolutionError) as exc:
             extra = {}
-            if isinstance(exc, AmbiguousResolutionError):
-                extra["candidates"] = exc.candidates
+            cands = list(getattr(exc, "candidates", None) or [])
+            if cands:
+                extra["candidates"] = cands
+                extra["recovery"] = {
+                    "candidates": cands,
+                    "suggested_ops": [
+                        {"id": "f1", "action": "find_actors", "name": str(getattr(exc, "query", "") or "")},
+                        {
+                            "id": "r1",
+                            "action": "resolve_actor",
+                            "label": cands[0].get("label") or cands[0].get("path"),
+                        },
+                    ],
+                }
             result = error_result(
                 "resolve_targets",
                 str(exc),

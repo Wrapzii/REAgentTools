@@ -7,6 +7,7 @@ import time
 import uuid
 from typing import Any
 
+from re_agent_tools.common.agent_policy import attach_agent_policy
 from re_agent_tools.common.limits import enforce_response_soft_limit
 from re_agent_tools.common.serialization import dumps_compact
 
@@ -65,6 +66,8 @@ def workflow_result(
     }
     if extra:
         payload.update(extra)
+    # Every REAgentTools result carries anti-fallback policy (burn control).
+    payload = attach_agent_policy(payload, operation=operation, success=success)
     payload, soft_warnings = enforce_response_soft_limit(payload)
     if soft_warnings:
         payload["warnings"] = list(payload.get("warnings", [])) + soft_warnings

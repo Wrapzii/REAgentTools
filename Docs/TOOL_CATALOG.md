@@ -125,10 +125,11 @@ After plugin change: `ModelContextProtocol.RefreshTools` (or editor restart / `r
 
 | tool_name | Args | Returns |
 |-----------|------|---------|
-| execute_editor_batch | operations_json, dry_run, stop_on_error | JSON WorkflowResult |
+| execute_editor_batch | operations_json, dry_run, stop_on_error | JSON WorkflowResult (+ agent_policy / recovery on failure) |
 
-Allowlisted actions: `resolve_actor`, `spawn_actor`, `set_actor_properties`, `set_actor_transform`, `save_level`, `compile_blueprint`, `set_asset_properties`, `save_asset`.
+Allowlisted actions: `resolve_actor`, `find_actors`, `get_editor_context`, `spawn_actor`, `set_actor_properties`, `set_actor_transform`, `save_level`, `compile_blueprint`, `resolve_asset`, `set_asset_properties`, `save_asset`.
 
+**Anti-fallback:** every WorkflowResult includes `agent_policy.forbid_epic_manual_fallback`. On failure, use `recovery.suggested_ops` for **one** retry of `execute_editor_batch` — never Epic SceneTools/ActorTools/ObjectTools.
 Actor id field aliases (any one): `label`, `actor_label`, `name`.
 
 ## REProjectWorkflowTools
