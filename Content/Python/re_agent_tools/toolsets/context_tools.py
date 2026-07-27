@@ -60,9 +60,13 @@ class REContextTools(unreal.ToolsetDefinition):
             "forbid_epic_manual_fallback": True,
             "rc_bridge": {
                 "entry": "Content/Python/_rc_reagent_exec.py",
+                "oneshot": "re_agent_tools.rc_bridge.oneshot_python",
+                "skill": "reagent-rc-oneshot",
+                "markers": ["REAGENT_RC_RESULT_BEGIN", "REAGENT_RC_RESULT_END"],
                 "request": "Saved/REAgentTools/rc_request.json",
                 "response": "Saved/REAgentTools/rc_response.json",
                 "when": "mcp-unreal serverStatus error/loading in Cursor Remote Control",
+                "prefer": "oneshot_python in ONE RC exec (~1 Cursor turn); file protocol is 3-hop fallback",
             },
             "on_failure": (
                 "Retry ONCE via REAgentTools only "
