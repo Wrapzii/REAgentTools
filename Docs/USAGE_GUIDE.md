@@ -8,6 +8,9 @@
 2. Console: `ModelContextProtocol.RefreshTools` (or `REProjectWorkflowTools.reload_workflow_modules`)
 3. Confirm toolsets appear (MCP Inspector or Cursor).
 
+If Cursor **Remote Control** shows `mcp-unreal` discovery error, keep using RE composites via
+[`REMOTE_CONTROL_MCP.md`](./REMOTE_CONTROL_MCP.md) (`_rc_reagent_exec.py`) — do not fall back to Epic tools.
+
 ## Example prompts (agent → tool)
 
 ### Trivia pushback (do not call MCP yet)

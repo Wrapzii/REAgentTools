@@ -33,7 +33,14 @@ Hot-reload (no full restart): Remote Control `ExecutePythonCommand` → `_reload
 ### 2. MCP discovery
 
 - [ ] MCP Inspector or Cursor lists `re_agent_tools.toolsets.context_tools.REContextTools`
-- [ ] `get_plugin_capabilities` returns 9 toolsets
+- [ ] `get_plugin_capabilities` returns 15 toolsets
+
+### 2b. RC bridge (when MCP discovery fails)
+
+- [ ] Write `Saved/REAgentTools/rc_request.json` with `{"action":"list_toolsets"}`
+- [ ] Run `py "…/Plugins/REAgentTools/Content/Python/_rc_reagent_exec.py"`
+- [ ] `Saved/REAgentTools/rc_response.json` lists all 15 toolsets
+- [ ] `call` → `REContextTools.get_editor_context` returns compact context JSON
 
 ### 3. Context
 

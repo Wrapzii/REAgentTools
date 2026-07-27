@@ -64,6 +64,18 @@ Returns compact `context`: `level`, `selected_actors`, `selected_assets`, `pie_a
 
 Allowlisted batch actions include: `get_editor_context`, `find_actors`, `resolve_actor`, `resolve_asset`, `spawn_actor`, `set_actor_transform`, `set_actor_properties`, `compile_blueprint`, `set_asset_properties`, `save_asset`, `save_level`.
 
+### 2b. Cursor Remote Control — MCP down ≠ REAgentTools down
+
+If `mcp-unreal` is `serverStatus: error` / no tools (common in Remote Control), **do not** say composites are unreachable and **do not** fall back to Epic or ad-hoc `_rc_exec.py` scripts.
+
+Use the RC bridge (same composites, Unreal Remote Control transport):
+
+1. Write `Saved/REAgentTools/rc_request.json` with `action`/`toolset`/`tool`/`arguments`
+2. Run `Content/Python/_rc_reagent_exec.py` via RC `ExecutePythonCommand` or `py`
+3. Read `Saved/REAgentTools/rc_response.json`
+
+Full write-up: [`REMOTE_CONTROL_MCP.md`](./REMOTE_CONTROL_MCP.md).
+
 ---
 
 ## 3. On failure — stay in RE (no Epic “manual mode”)
@@ -84,9 +96,10 @@ Keep this light — prefer one rule, not a new skill:
 
 | Artifact | Role |
 |----------|------|
-| `.cursor/rules/re-agent-tools.mdc` | Attach-on-need: trivia pushback + RE-first |
+| `.cursor/rules/re-agent-tools.mdc` | Attach-on-need: trivia pushback + RE-first + RC bridge |
 | `.cursor/rules/re-context-budget.mdc` | Always-on one-liner pointing at RE composites |
 | `Content/RE/UNREAL_MCP_TOOL_MAP.md` | Signatures; RE section before Epic chains |
+| `Docs/REMOTE_CONTROL_MCP.md` | Why Remote Control loses MCP + RC bridge protocol |
 | This file (`Docs/AGENT_DEFAULTS.md`) | Human + agent sample (canonical in this repo) |
 
 Do **not** add a dedicated skill just for “use REAgentTools.”
@@ -97,6 +110,7 @@ Do **not** add a dedicated skill just for “use REAgentTools.”
 
 - [ ] Trivia? Push back — no tool yet  
 - [ ] Real work? `get_editor_context` or `execute_editor_batch` first  
+- [ ] MCP discovery failed in Remote Control? Use `_rc_reagent_exec.py` — not Epic  
 - [ ] Never Epic `get_current_level` alone  
 - [ ] Failure? One RE retry from `recovery`, then stop  
 - [ ] Returns stay compact (paths / counts / warnings / errors)

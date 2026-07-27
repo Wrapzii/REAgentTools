@@ -2,7 +2,7 @@
 
 Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step editor operations (spawn + configure + verify, batch transforms, asset bulk edit) into single tool calls that return **compact JSON strings** — reducing MCP round-trips vs chaining Epic `SceneTools` / `ObjectTools` / `ActorTools`.
 
-**Agents:** read [`Docs/AGENT_DEFAULTS.md`](Docs/AGENT_DEFAULTS.md) — push back on trivia tool burns; always prefer REAgentTools (`get_editor_context` / `execute_editor_batch`) over Epic one-shots.
+**Agents:** read [`Docs/AGENT_DEFAULTS.md`](Docs/AGENT_DEFAULTS.md) — push back on trivia tool burns; always prefer REAgentTools (`get_editor_context` / `execute_editor_batch`) over Epic one-shots. If Cursor Remote Control fails `mcp-unreal` discovery, use the [RC bridge](Docs/REMOTE_CONTROL_MCP.md) (`_rc_reagent_exec.py`) — composites are still reachable.
 
 ## Requirements
 
@@ -17,7 +17,7 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 3. Console: `ModelContextProtocol.RefreshTools`
 4. Verify in MCP Inspector or Cursor `unreal-mcp` — toolsets under `re_agent_tools.toolsets.*`
 
-## Toolsets (v1.2.1 — 15)
+## Toolsets (v1.2.2 — 15)
 
 | Toolset | Purpose |
 |---------|---------|
@@ -39,6 +39,7 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 
 ## Docs
 
+- [REMOTE_CONTROL_MCP.md](Docs/REMOTE_CONTROL_MCP.md) — Cursor Remote Control MCP failures + RC bridge
 - [VISUAL_LOOP.md](Docs/VISUAL_LOOP.md) — Epic Logs/LiveCoding/Slate vs RECapture
 - [EXPAND_PLAN.md](Docs/EXPAND_PLAN.md) — research + wave roadmap
 - [CAPABILITY_MATRIX.md](Docs/CAPABILITY_MATRIX.md) — supported vs missing
@@ -63,4 +64,4 @@ Tool calls append to `Saved/REAgentTools/tool_calls.jsonl`.
 
 ## Agent preference
 
-Prefer **RE*WorkflowTools** composites before chaining low-level Epic tools. See `Content/RE/UNREAL_MCP_TOOL_MAP.md` and `.cursor/rules/re-agent-tools.mdc`.
+Prefer **RE*WorkflowTools** composites before chaining low-level Epic tools. See `Content/RE/UNREAL_MCP_TOOL_MAP.md` and `.cursor/rules/re-agent-tools.mdc`. When MCP is down in Remote Control, call the same composites via `Content/Python/_rc_reagent_exec.py`.
