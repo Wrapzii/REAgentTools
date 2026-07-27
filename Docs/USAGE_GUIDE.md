@@ -1,14 +1,21 @@
 # REAgentTools — Usage Guide
 
+**Start here for agents:** [`AGENT_DEFAULTS.md`](./AGENT_DEFAULTS.md) — trivia pushback, RE-first, no Epic manual fallback.
+
 ## Refresh after install
 
 1. Enable plugin in editor.
-2. Console: `ModelContextProtocol.RefreshTools`
+2. Console: `ModelContextProtocol.RefreshTools` (or `REProjectWorkflowTools.reload_workflow_modules`)
 3. Confirm toolsets appear (MCP Inspector or Cursor).
 
 ## Example prompts (agent → tool)
 
-### Context first
+### Trivia pushback (do not call MCP yet)
+
+> User: "What level are we on?"  
+> Agent: ask if they want a real `get_editor_context` pull or a follow-on edit task — each MCP call re-reads ~full chat context.
+
+### Context first (real work)
 
 > "Call REContextTools.get_editor_context with level and selection, then resolve_targets for actor `VW_RE_CaveEntrance`."
 

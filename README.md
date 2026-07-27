@@ -2,6 +2,8 @@
 
 Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step editor operations (spawn + configure + verify, batch transforms, asset bulk edit) into single tool calls that return **compact JSON strings** — reducing MCP round-trips vs chaining Epic `SceneTools` / `ObjectTools` / `ActorTools`.
 
+**Agents:** read [`Docs/AGENT_DEFAULTS.md`](Docs/AGENT_DEFAULTS.md) — push back on trivia tool burns; always prefer REAgentTools (`get_editor_context` / `execute_editor_batch`) over Epic one-shots.
+
 ## Requirements
 
 - UE **5.8** (`C:\Program Files\Epic Games\UE_5.8`)
@@ -15,7 +17,7 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 3. Console: `ModelContextProtocol.RefreshTools`
 4. Verify in MCP Inspector or Cursor `unreal-mcp` — toolsets under `re_agent_tools.toolsets.*`
 
-## Toolsets (v1.2.0 — 15)
+## Toolsets (v1.2.1 — 15)
 
 | Toolset | Purpose |
 |---------|---------|
