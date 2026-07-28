@@ -1,0 +1,11 @@
+---
+description: FX stage sheets — RE wires; Epic Niagara MCP authors continuous flame systems
+alwaysApply: true
+---
+
+# Niagara FX (RE + Epic)
+
+- Multi-beat FX → `RENiagaraFxOrchestrationTools` (`plan_fx_stage_sheet`, `wire_fx_stage`).
+- Missing `NiagaraSystem` → follow returned `epic_handoff` / `get_epic_niagara_recipe` on Epic `NiagaraToolsets.*` only.
+- Prefer continuous flame (mesh/volume/ribbon). Do not substitute spark particle confetti as the main look.
+- Still forbid Epic Scene/Actor/Object fishing. Docs: `Docs/NIAGARA_FX_ORCHESTRATION.md`. Skill: `reagent-niagara-fx-orchestration`.

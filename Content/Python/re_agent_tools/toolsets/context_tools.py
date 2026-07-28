@@ -34,7 +34,7 @@ class REContextTools(unreal.ToolsetDefinition):
         request_id = make_request_id()
         caps = {
             "plugin": "REAgentTools",
-            "version": "1.2.1",
+            "version": "1.3.0",
             "toolsets": [
                 "REContextTools",
                 "REActorWorkflowTools",
@@ -47,6 +47,7 @@ class REContextTools(unreal.ToolsetDefinition):
                 "REBatchWorkflowTools",
                 "REProjectWorkflowTools",
                 "RENiagaraWorkflowTools",
+                "RENiagaraFxOrchestrationTools",
                 "REDressWorkflowTools",
                 "RECharacterWorkflowTools",
                 "RELightingWorkflowTools",
@@ -58,9 +59,11 @@ class REContextTools(unreal.ToolsetDefinition):
                 "batch": limits.BATCH_LIMIT,
             },
             "forbid_epic_manual_fallback": True,
+            "allow_epic_niagara_when_fx_handoff": True,
             "on_failure": (
                 "Retry ONCE via REAgentTools only "
-                "(execute_editor_batch / same composite). Never Epic one-by-one."
+                "(execute_editor_batch / same composite). Never Epic Scene/Actor/Object. "
+                "Exception: follow epic_handoff NiagaraToolsets steps when FX assets are missing."
             ),
         }
         result = workflow_result(

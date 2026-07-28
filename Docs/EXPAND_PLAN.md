@@ -57,7 +57,13 @@ Also extend **REActorWorkflowTools**: `place_from_asset_and_verify`, `rotate_act
 
 See [VISUAL_LOOP.md](VISUAL_LOOP.md) — Epic Logs / LiveCoding / Slate already work; do not rebuild them.
 
-### Wave 2b — next
+### Wave 2b — shipped (v1.3.0)
+
+| Toolset | Why |
+|---------|-----|
+| **RENiagaraFxOrchestrationTools** | Stage sheets (`fireball_8beat`) + `epic_handoff` to Epic Niagara MCP; wire/activate existing systems. No RE graph DSL. |
+
+### Wave 2c — next
 
 | Toolset | Why |
 |---------|-----|
@@ -73,7 +79,7 @@ See [VISUAL_LOOP.md](VISUAL_LOOP.md) — Epic Logs / LiveCoding / Slate already 
 
 ### Explicit non-goals
 
-- Niagara module-graph DSL (use Epic System tools + skill)  
+- Niagara module-graph DSL **in RE** (use Epic Niagara MCP + `RENiagaraFxOrchestrationTools` handoff)  
 - GAS ability graph authoring (architecture)  
 - Landscape brush sculpt (project limit — see `re-landscape-limits`)  
 - Moving/resizing the editor window  

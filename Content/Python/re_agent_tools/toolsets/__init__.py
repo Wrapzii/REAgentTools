@@ -14,6 +14,7 @@ from re_agent_tools.toolsets.dress_workflow_tools import REDressWorkflowTools
 from re_agent_tools.toolsets.level_workflow_tools import RELevelWorkflowTools
 from re_agent_tools.toolsets.lighting_workflow_tools import RELightingWorkflowTools
 from re_agent_tools.toolsets.material_workflow_tools import REMaterialWorkflowTools
+from re_agent_tools.toolsets.niagara_fx_orchestration_tools import RENiagaraFxOrchestrationTools
 from re_agent_tools.toolsets.niagara_workflow_tools import RENiagaraWorkflowTools
 from re_agent_tools.toolsets.project_workflow_tools import REProjectWorkflowTools
 from re_agent_tools.toolsets.validation_workflow_tools import REValidationWorkflowTools
@@ -30,6 +31,7 @@ _registration = Registration([
     REBatchWorkflowTools,
     REProjectWorkflowTools,
     RENiagaraWorkflowTools,
+    RENiagaraFxOrchestrationTools,
     REDressWorkflowTools,
     RECharacterWorkflowTools,
     RELightingWorkflowTools,
