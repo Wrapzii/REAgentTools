@@ -2,7 +2,7 @@
 
 Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step editor operations (spawn + configure + verify, batch transforms, asset bulk edit) into single tool calls that return **compact JSON strings** — reducing MCP round-trips vs chaining Epic `SceneTools` / `ObjectTools` / `ActorTools`.
 
-**Agents:** read [`Docs/AGENT_DEFAULTS.md`](Docs/AGENT_DEFAULTS.md) — push back on trivia tool burns; always prefer REAgentTools (`get_editor_context` / `execute_editor_batch`) over Epic one-shots.
+**Agents:** read [`Docs/AGENT_DEFAULTS.md`](Docs/AGENT_DEFAULTS.md) — push back on trivia tool burns; always prefer REAgentTools (`get_editor_context` / `execute_editor_batch`) over Epic Scene/Actor/Object one-shots. For multi-beat FX (e.g. fireball), use [`Docs/NIAGARA_FX_ORCHESTRATION.md`](Docs/NIAGARA_FX_ORCHESTRATION.md) — RE stages + Epic Niagara MCP handoff.
 
 ## Requirements
 
@@ -17,7 +17,7 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 3. Console: `ModelContextProtocol.RefreshTools`
 4. Verify in MCP Inspector or Cursor `unreal-mcp` — toolsets under `re_agent_tools.toolsets.*`
 
-## Toolsets (v1.2.1 — 15)
+## Toolsets (v1.3.0 — 16)
 
 | Toolset | Purpose |
 |---------|---------|
@@ -25,6 +25,7 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 | `REActorWorkflowTools` | Spawn/place/rotate/batch transform/delete/organize |
 | `REDressWorkflowTools` | Cave/hub mesh place, ring scatter, snap-to-floor |
 | `RENiagaraWorkflowTools` | Place/assign Niagara systems + user params |
+| `RENiagaraFxOrchestrationTools` | FX stage sheets + Epic Niagara `epic_handoff` recipes |
 | `RECharacterWorkflowTools` | Character mesh, combat montages, sockets |
 | `RELightingWorkflowTools` | Environment light inventory + mood presets |
 | `RECaptureWorkflowTools` | Path-only screenshots, FX mat preview, PIE cast+capture |
@@ -39,6 +40,7 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 
 ## Docs
 
+- [NIAGARA_FX_ORCHESTRATION.md](Docs/NIAGARA_FX_ORCHESTRATION.md) — RE FX director + Epic Niagara MCP
 - [VISUAL_LOOP.md](Docs/VISUAL_LOOP.md) — Epic Logs/LiveCoding/Slate vs RECapture
 - [EXPAND_PLAN.md](Docs/EXPAND_PLAN.md) — research + wave roadmap
 - [CAPABILITY_MATRIX.md](Docs/CAPABILITY_MATRIX.md) — supported vs missing
@@ -63,4 +65,4 @@ Tool calls append to `Saved/REAgentTools/tool_calls.jsonl`.
 
 ## Agent preference
 
-Prefer **RE*WorkflowTools** composites before chaining low-level Epic tools. See `Content/RE/UNREAL_MCP_TOOL_MAP.md` and `.cursor/rules/re-agent-tools.mdc`.
+Prefer **RE*WorkflowTools** composites before chaining low-level Epic Scene/Actor/Object tools. For FX authoring gaps, follow `epic_handoff` into Epic **Niagara** toolsets only. See `Content/RE/UNREAL_MCP_TOOL_MAP.md` and `.cursor/rules/re-agent-tools.mdc`.

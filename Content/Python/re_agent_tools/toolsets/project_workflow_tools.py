@@ -89,10 +89,15 @@ class REProjectWorkflowTools(unreal.ToolsetDefinition):
                 "Asset find + bulk edit + save",
                 "Blueprint create/defaults/compile chains",
                 "Material instance create + assign",
+                "FX stage sheets + wire existing Niagara (RENiagaraFxOrchestrationTools)",
+            ],
+            "use_epic_niagara_mcp_for": [
+                "CreateNiagaraSystem / AddEmitter / modules when epic_handoff present",
+                "Continuous flame system authoring (not RE graph DSL)",
             ],
             "unsupported_graph_authoring": [
-                "Niagara system/emitter graph authoring",
-                "Animation Blueprint / montage authoring",
+                "Niagara system/emitter graph authoring INSIDE RE (use Epic Niagara + handoff)",
+                "Animation Blueprint / montage graph authoring",
                 "Landscape sculpt/paint via MCP",
             ],
         }

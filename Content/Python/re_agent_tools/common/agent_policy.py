@@ -29,6 +29,15 @@ AGENT_POLICY: dict[str, Any] = {
         "re_agent_tools.toolsets.batch_workflow_tools.REBatchWorkflowTools.execute_editor_batch",
         "same REAgentTools composite that failed",
     ],
+    # FX authoring exception: only when a RE FX tool returns epic_handoff.
+    "allow_epic_niagara_when_handoff_present": True,
+    "epic_niagara_toolsets": [
+        "NiagaraToolsets.NiagaraToolset_System",
+        "NiagaraToolsets.NiagaraToolset_Component",
+        "NiagaraToolsets.NiagaraToolset_Assets",
+        "NiagaraToolsets.NiagaraToolset_Blueprint",
+        "NiagaraToolsets.NiagaraToolset_Info",
+    ],
 }
 
 

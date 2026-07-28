@@ -84,6 +84,7 @@ Legend: ✅ Implemented | 🔶 Partial | ❌ Missing / use Epic low-level | 🚫
 | Dungeon proc-gen | 🚫 | Manual craft + `re-voxel-world` only |
 | Inventory | 🔶 | `re_inventory_bplibrary` bridge exists; no REAgentTools wrapper yet |
 | Niagara place / assign / user params | ✅ | `RENiagaraWorkflowTools` (v1.1) — not full module-graph DSL |
+| FX stage orchestration + Epic handoff | ✅ | `RENiagaraFxOrchestrationTools` (v1.3) — stage sheets, recipes; Epic authors graphs |
 | Cave / level dress place+scatter | ✅ | `REDressWorkflowTools` (v1.1) |
 | Character mesh / combat montages | ✅ | `RECharacterWorkflowTools` (v1.1) |
 | Mood lighting | ✅ | `RELightingWorkflowTools` (v1.1) |
@@ -99,7 +100,7 @@ Legend: ✅ Implemented | 🔶 Partial | ❌ Missing / use Epic low-level | 🚫
 | `REInventoryWorkflowTools` | Wrap `re_inventory_*` for dig→loot proofs |
 | `REPhysicsWorkflowTools` | Collision profile / simulate toggles (not PhysicsAsset editor) |
 
-**Still out of scope:** GAS ability graph authoring; full Niagara module-graph DSL; landscape brush sculpt; rebuilding Logs/LiveCoding/Slate.
+**Still out of scope:** GAS ability graph authoring; full Niagara module-graph DSL **inside RE** (use Epic Niagara MCP via `epic_handoff`); landscape brush sculpt; rebuilding Logs/LiveCoding/Slate.
 
 ## When to use Epic vs RE
 

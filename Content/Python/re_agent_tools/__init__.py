@@ -1,3 +1,3 @@
 """RE Agent Tools — composite MCP workflow toolsets for the RE project."""
 
-__version__ = "1.2.1"
+__version__ = "1.3.0"

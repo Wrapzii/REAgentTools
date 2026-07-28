@@ -33,7 +33,13 @@ Hot-reload (no full restart): Remote Control `ExecutePythonCommand` → `_reload
 ### 2. MCP discovery
 
 - [ ] MCP Inspector or Cursor lists `re_agent_tools.toolsets.context_tools.REContextTools`
-- [ ] `get_plugin_capabilities` returns 9 toolsets
+- [ ] `get_plugin_capabilities` returns 16 toolsets (includes RENiagaraFxOrchestrationTools)
+
+### 2b. FX orchestration
+
+- [ ] `plan_fx_stage_sheet` preset `fireball_8beat` returns 8 stages
+- [ ] Missing systems include `epic_handoff` targeting `NiagaraToolsets.NiagaraToolset_System`
+- [ ] `fx_orchestration_notes` returns RE vs Epic roles
 
 ### 3. Context
 

@@ -33,6 +33,21 @@ MCP `toolset_name` prefix: `re_agent_tools.toolsets.<module>.<ClassName>`
 | set_niagara_user_parameters_and_verify | actor_label, parameters_json, component_name? | JSON WorkflowResult |
 | inspect_niagara_compact | actor_label, component_name? | JSON compact (no stack dump) |
 
+## RENiagaraFxOrchestrationTools (v1.3)
+
+FX **director** — pairs with Epic `NiagaraToolsets.*`. See [NIAGARA_FX_ORCHESTRATION.md](./NIAGARA_FX_ORCHESTRATION.md).
+
+| tool_name | Args | Returns |
+|-----------|------|---------|
+| list_fx_stage_presets | — | presets (e.g. fireball_8beat) |
+| plan_fx_stage_sheet | preset?, stages_json?, fx_folder?, template_system?, systems_json? | stages + missing + `epic_handoff` |
+| get_epic_niagara_recipe | goal, asset_name?, asset_path?, template_system?, system_path? | ordered Epic MCP steps |
+| resolve_fx_systems | systems_json `{key:path}` or `[path]` | exists/missing |
+| wire_fx_stage | system_path, actor_label, transform/params, stage_id? | place or error+handoff |
+| set_fx_stage_params | actor_label, parameters_json, stage_id? | params result |
+| activate_fx_stage | actor_label, activate?, reset? | active state |
+| fx_orchestration_notes | — | RE vs Epic roles + fireball flow |
+
 ## REDressWorkflowTools (v1.1)
 
 | tool_name | Args | Returns |
