@@ -97,4 +97,4 @@ Wave 1 DONE when:
 
 ## Version
 
-`1.0.x` → **`1.1.0`** Wave 1 → **`1.2.0`** RECapture / visual loop.
+`1.0.x` → **`1.1.0`** Wave 1 → **`1.2.0`** RECapture / visual loop → **`1.3.0`** FX orchestration + Epic Niagara handoff.

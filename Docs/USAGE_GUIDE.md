@@ -69,6 +69,12 @@
 
 Pass as `operations_json` string to `REBatchWorkflowTools.execute_editor_batch`.
 
+### Fireball FX (RE director + Epic Niagara)
+
+> "plan_fx_stage_sheet preset fireball_8beat. If systems missing, follow epic_handoff on Epic Niagara MCP, then wire_fx_stage for hand/projectile/impact."
+
+See [`NIAGARA_FX_ORCHESTRATION.md`](./NIAGARA_FX_ORCHESTRATION.md).
+
 ## Response format
 
 All tools return compact JSON `WorkflowResult`:
