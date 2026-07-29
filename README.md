@@ -42,6 +42,7 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 - [AGENTS.md](AGENTS.md) — new-chat bootstrap for Cursor agents
 - [REMOTE_CONTROL_MCP.md](Docs/REMOTE_CONTROL_MCP.md) — Cursor Remote Control MCP failures + RC oneshot bridge
 - [NIAGARA_BATCHING.md](Docs/NIAGARA_BATCHING.md) — Epic Niagara in one batch; compile once; no RE DSL
+- [Optional/UnrealWatchMCP](Optional/UnrealWatchMCP/README.md) — host-side dialog/lockup MCP (`check_unreal` / `dismiss_dialog`)
 - [VISUAL_LOOP.md](Docs/VISUAL_LOOP.md) — Epic Logs/LiveCoding/Slate vs RECapture
 - [EXPAND_PLAN.md](Docs/EXPAND_PLAN.md) — research + wave roadmap
 - [CAPABILITY_MATRIX.md](Docs/CAPABILITY_MATRIX.md) — supported vs missing
