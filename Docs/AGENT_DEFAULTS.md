@@ -85,6 +85,21 @@ Parse `REAGENT_RC_RESULT_BEGIN`…`END` from the RC log/stdout. That is ~1 Curso
 
 Full write-up: [`REMOTE_CONTROL_MCP.md`](./REMOTE_CONTROL_MCP.md).
 
+### 2c. Niagara system authoring — Epic tools, batched (no RE DSL)
+
+**Do not build a Niagara module-graph DSL in REAgentTools.** Epic already has `NiagaraToolsets.*`.
+
+| Job | Tooling |
+|-----|---------|
+| Place / assign / User params / compact inspect | `RENiagaraWorkflowTools` (one composite) |
+| Create system, emitters, renderers, stack edits | Epic Niagara toolsets via **one** `ProgrammaticToolset.execute_tool_script` |
+
+**Wrong:** N separate MCP calls — create → find → add emitter → find → set data → compile → … (console spam = context cost).
+
+**Right:** one script that does all planned mutations, **compile once at the end**, save once, return compact summary. Then RE place/params if needed.
+
+Canonical: [`NIAGARA_BATCHING.md`](./NIAGARA_BATCHING.md).
+
 ---
 
 ## 3. On failure — stay in RE (no Epic “manual mode”)
@@ -112,6 +127,7 @@ Keep this light — prefer one rule, not a new skill:
 | `Content/RE/UNREAL_MCP_TOOL_MAP.md` | Signatures; RE section before Epic chains |
 | `Docs/REMOTE_CONTROL_MCP.md` | Why Remote Control loses MCP + RC bridge protocol |
 | This file (`Docs/AGENT_DEFAULTS.md`) | Human + agent sample (canonical in this repo) |
+| `Docs/NIAGARA_BATCHING.md` | Epic Niagara batch + compile-once; no RE module-graph DSL |
 
 Do **not** add a dedicated skill just for “use REAgentTools.”
 
@@ -123,5 +139,7 @@ Do **not** add a dedicated skill just for “use REAgentTools.”
 - [ ] Real work? `get_editor_context` or `execute_editor_batch` first  
 - [ ] MCP discovery failed in Remote Control? `oneshot_python` / skill `reagent-rc-oneshot` — not Epic  
 - [ ] Never Epic `get_current_level` alone  
+- [ ] Niagara *authoring*? Epic tools in **one** `execute_tool_script`; compile once at end — no RE DSL  
+- [ ] Niagara *placement/params*? `RENiagaraWorkflowTools`  
 - [ ] Failure? One RE retry from `recovery`, then stop  
 - [ ] Returns stay compact (paths / counts / warnings / errors)

@@ -83,7 +83,8 @@ Legend: ✅ Implemented | 🔶 Partial | ❌ Missing / use Epic low-level | 🚫
 | Enemy AI / spawners | 🚫 | **Project architecture missing** |
 | Dungeon proc-gen | 🚫 | Manual craft + `re-voxel-world` only |
 | Inventory | 🔶 | `re_inventory_bplibrary` bridge exists; no REAgentTools wrapper yet |
-| Niagara place / assign / user params | ✅ | `RENiagaraWorkflowTools` (v1.1) — not full module-graph DSL |
+| Niagara place / assign / user params | ✅ | `RENiagaraWorkflowTools` (v1.1) |
+| Niagara system / emitter / renderer authoring | ❌ use Epic (batched) | `NiagaraToolsets.*` via **one** `ProgrammaticToolset.execute_tool_script`; compile once at end — see [`NIAGARA_BATCHING.md`](./NIAGARA_BATCHING.md). **No** RE module-graph DSL |
 | Cave / level dress place+scatter | ✅ | `REDressWorkflowTools` (v1.1) |
 | Character mesh / combat montages | ✅ | `RECharacterWorkflowTools` (v1.1) |
 | Mood lighting | ✅ | `RELightingWorkflowTools` (v1.1) |
@@ -99,7 +100,7 @@ Legend: ✅ Implemented | 🔶 Partial | ❌ Missing / use Epic low-level | 🚫
 | `REInventoryWorkflowTools` | Wrap `re_inventory_*` for dig→loot proofs |
 | `REPhysicsWorkflowTools` | Collision profile / simulate toggles (not PhysicsAsset editor) |
 
-**Still out of scope:** GAS ability graph authoring; full Niagara module-graph DSL; landscape brush sculpt; rebuilding Logs/LiveCoding/Slate.
+**Still out of scope:** GAS ability graph authoring; **Niagara module-graph DSL** (use Epic System tools, batched); landscape brush sculpt; rebuilding Logs/LiveCoding/Slate.
 
 ## When to use Epic vs RE
 
@@ -110,3 +111,5 @@ Legend: ✅ Implemented | 🔶 Partial | ❌ Missing / use Epic low-level | 🚫
 | Spawn + props + label + save | `REActorWorkflowTools.spawn_configure_attach_and_verify` |
 | 10 actor moves | `REActorWorkflowTools.batch_transform_actors` |
 | Find + edit + save 5 assets | `REAssetWorkflowTools.bulk_edit_asset_properties_and_save` |
+| Niagara place + User params | `RENiagaraWorkflowTools` |
+| Create/tune Niagara emitters/renderers | Epic `NiagaraToolsets.*` in **one** `execute_tool_script` ([`NIAGARA_BATCHING.md`](./NIAGARA_BATCHING.md)) |

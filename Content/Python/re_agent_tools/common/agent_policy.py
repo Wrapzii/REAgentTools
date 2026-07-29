@@ -25,6 +25,7 @@ AGENT_POLICY: dict[str, Any] = {
         "list_toolsets",
         "describe_toolset",
         "ad-hoc _rc_exec.py Epic one-shots",
+        "per-emitter Niagara MCP chains with re-find/re-compile between steps",
     ],
     "required_recovery_path": [
         "re_agent_tools.toolsets.batch_workflow_tools.REBatchWorkflowTools.execute_editor_batch",
@@ -36,6 +37,13 @@ AGENT_POLICY: dict[str, Any] = {
         "REAgentTools remain reachable via Content/Python/_rc_reagent_exec.py "
         "(Saved/REAgentTools/rc_request.json → rc_response.json). "
         "Do not claim composites are unreachable; do not fall back to Epic tools."
+    ),
+    "niagara_authoring": (
+        "Do NOT build a Niagara module-graph DSL in REAgentTools. "
+        "Place/assign/User params → RENiagaraWorkflowTools. "
+        "System/emitter/renderer authoring → Epic NiagaraToolsets via ONE "
+        "ProgrammaticToolset.execute_tool_script; compile once at the end; save once. "
+        "See Docs/NIAGARA_BATCHING.md."
     ),
 }
 

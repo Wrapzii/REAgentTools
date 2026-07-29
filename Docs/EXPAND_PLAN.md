@@ -73,7 +73,7 @@ See [VISUAL_LOOP.md](VISUAL_LOOP.md) — Epic Logs / LiveCoding / Slate already 
 
 ### Explicit non-goals
 
-- Niagara module-graph DSL (use Epic System tools + skill)  
+- **Niagara module-graph DSL** — do not build one; use Epic `NiagaraToolsets.*` via a **single** `ProgrammaticToolset.execute_tool_script`, compile once at end ([`NIAGARA_BATCHING.md`](./NIAGARA_BATCHING.md))  
 - GAS ability graph authoring (architecture)  
 - Landscape brush sculpt (project limit — see `re-landscape-limits`)  
 - Moving/resizing the editor window  

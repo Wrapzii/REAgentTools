@@ -26,6 +26,8 @@ MCP `toolset_name` prefix: `re_agent_tools.toolsets.<module>.<ClassName>`
 
 ## RENiagaraWorkflowTools (v1.1)
 
+Level placement / User params only. **System/emitter/renderer authoring is Epic + batched** — see [`NIAGARA_BATCHING.md`](./NIAGARA_BATCHING.md). Do not add a RE Niagara module-graph DSL.
+
 | tool_name | Args | Returns |
 |-----------|------|---------|
 | place_niagara_system_and_verify | system_path, actor_label, loc/rot/scale JSON, folder_path, auto_activate, parameters_json | JSON WorkflowResult |

@@ -16,5 +16,6 @@ When Unreal editor work is needed:
    - File protocol (`rc_request.json` → run → `rc_response.json`) is a 3-hop fallback only if stdout/log capture is unavailable.
 3. Trivia pushback still applies.
 4. On failure: one RE retry, then STOP.
+5. **Niagara:** do **not** build a module-graph DSL. Place/params → `RENiagaraWorkflowTools`. System/emitter/renderer authoring → Epic `NiagaraToolsets.*` in **one** `ProgrammaticToolset.execute_tool_script`, compile **once** at the end. Never per-emitter MCP round-trips with re-find/re-compile between steps (`Docs/NIAGARA_BATCHING.md`).
 
-Read if needed: `Docs/AGENT_DEFAULTS.md`, `Docs/REMOTE_CONTROL_MCP.md`, `.cursor/skills/reagent-rc-oneshot/SKILL.md`.
+Read if needed: `Docs/AGENT_DEFAULTS.md`, `Docs/REMOTE_CONTROL_MCP.md`, `Docs/NIAGARA_BATCHING.md`, `.cursor/skills/reagent-rc-oneshot/SKILL.md`.
