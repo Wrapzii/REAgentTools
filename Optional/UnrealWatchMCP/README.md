@@ -14,10 +14,12 @@ Modal dialogs block the editor game thread. In-editor MCP tools need that thread
 
 | Tool | Purpose |
 |------|---------|
-| `check_unreal` | Report: process up? MCP/RC listening? probe timed out? modal dialog title/buttons? |
-| `dismiss_dialog` | Click a button on the detected dialog (`accept` / `cancel` / `yes` / `no` / exact label) |
+| `check_unreal` | Report: process up? MCP/RC listening? probe timed out? **Slate/Win32 dialogs** (title + buttons)? |
+| `dismiss_dialog` | Dismiss detected dialog (`accept`/`cancel`/`yes`/`no`, or exact label). Uses Win32 click, UI Automation, or Enter/Escape for Slate. |
 | `get_watch_config` | Read mode + allowlist |
 | `set_watch_config` | Set `mode` to `report` or `auto_allowlist` (and optional allowlist) |
+
+**Important:** Unreal “Message dialog” / compile-error popups are usually owned `UnrealWindow` Slate windows — **not** classic `#32770` Win32 dialogs. v0.1.1+ detects those. Reload the `unreal-watch` MCP after updating.
 
 ## Modes
 

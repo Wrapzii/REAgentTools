@@ -1,4 +1,9 @@
-"""Win32 Unreal Editor dialog / lockup probe (host-side, no game thread)."""
+"""Win32 Unreal Editor dialog / lockup probe (host-side, no game thread).
+
+Unreal message boxes are usually Slate `UnrealWindow` owned popups — they do NOT
+expose classic Win32 `Button` children. Detection must treat owned UnrealWindows
+as dialogs; dismiss uses UI Automation when available, else Enter/Escape.
+"""
 
 from __future__ import annotations
 
@@ -24,30 +29,56 @@ IsWindowVisible = user32.IsWindowVisible
 GetWindowThreadProcessId = user32.GetWindowThreadProcessId
 IsWindowEnabled = user32.IsWindowEnabled
 SendMessageW = user32.SendMessageW
-PostMessageW = user32.PostMessageW
 GetWindow = user32.GetWindow
 GetWindow.restype = wintypes.HWND
+GetWindowRect = user32.GetWindowRect
+SetForegroundWindow = user32.SetForegroundWindow
+ShowWindow = user32.ShowWindow
+keybd_event = user32.keybd_event
 
 GW_OWNER = 4
 BM_CLICK = 0x00F5
-WM_CLOSE = 0x0010
+SW_RESTORE = 9
+VK_RETURN = 0x0D
+VK_ESCAPE = 0x1B
+KEYEVENTF_KEYUP = 0x0002
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-
 OpenProcess = kernel32.OpenProcess
 OpenProcess.restype = wintypes.HANDLE
 QueryFullProcessImageNameW = kernel32.QueryFullProcessImageNameW
 CloseHandle = kernel32.CloseHandle
 
+_TITLE_HINTS = (
+    "error",
+    "warning",
+    "compilation",
+    "compile",
+    "message",
+    "confirm",
+    "save",
+    "checkout",
+    "failed",
+    "unable",
+    "cannot",
+    "assert",
+    "crash",
+    "plugin",
+    "missing",
+    "overwrite",
+    "discard",
+    "reload",
+    "hot reload",
+    "live coding",
+    "dialogue",
+    "dialog",
+)
+
 
 def _window_text(hwnd: int) -> str:
     n = GetWindowTextLengthW(hwnd)
-    if n <= 0:
-        buf = ctypes.create_unicode_buffer(512)
-        GetWindowTextW(hwnd, buf, 512)
-        return buf.value.strip()
-    buf = ctypes.create_unicode_buffer(n + 1)
-    GetWindowTextW(hwnd, buf, n + 1)
+    buf = ctypes.create_unicode_buffer((n + 1) if n > 0 else 512)
+    GetWindowTextW(hwnd, buf, len(buf))
     return buf.value.strip()
 
 
@@ -73,9 +104,20 @@ def _process_image(pid: int) -> str:
 
 def _pid_basename(pid: int) -> str:
     path = _process_image(pid)
-    if not path:
-        return ""
-    return Path(path).stem
+    return Path(path).stem if path else ""
+
+
+def _window_size(hwnd: int) -> tuple[int, int]:
+    rect = wintypes.RECT()
+    if not GetWindowRect(hwnd, ctypes.byref(rect)):
+        return (0, 0)
+    return (max(0, rect.right - rect.left), max(0, rect.bottom - rect.top))
+
+
+def _send_key(vk: int) -> None:
+    keybd_event(vk, 0, 0, 0)
+    time.sleep(0.03)
+    keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
 
 
 def _port_listening(host: str, port: int, timeout: float) -> bool:
@@ -90,7 +132,6 @@ def _port_listening(host: str, port: int, timeout: float) -> bool:
 
 
 def _http_probe(host: str, port: int, path: str, timeout: float) -> dict[str, Any]:
-    """Return {listening, responded, elapsed_ms, error?} without depending on full MCP protocol."""
     t0 = time.perf_counter()
     listening = _port_listening(host, port, min(timeout, 1.0))
     if not listening:
@@ -101,20 +142,16 @@ def _http_probe(host: str, port: int, path: str, timeout: float) -> dict[str, An
             "error": "not_listening",
         }
     try:
-        # Minimal HTTP GET — Unreal may return 404/405; any HTTP response = thread progressing.
-        req = (
-            f"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
-        ).encode("ascii")
+        req = f"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n".encode("ascii")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
         sock.connect((host, port))
         sock.sendall(req)
         data = sock.recv(64)
         sock.close()
-        ok = bool(data)
         return {
             "listening": True,
-            "responded": ok,
+            "responded": bool(data),
             "elapsed_ms": round((time.perf_counter() - t0) * 1000, 1),
             "preview": data[:40].decode("latin-1", "replace") if data else "",
         }
@@ -141,11 +178,15 @@ def find_unreal_pids(process_names: list[str]) -> list[dict[str, Any]]:
             return True
         base = _pid_basename(pid.value)
         if base.lower() in names:
-            found[pid.value] = {
-                "pid": int(pid.value),
-                "process": base,
-                "main_title": _window_text(hwnd) or found.get(pid.value, {}).get("main_title", ""),
-            }
+            title = _window_text(hwnd)
+            prev = found.get(pid.value, {})
+            # Prefer main editor title
+            if (not prev.get("main_title")) or ("unreal editor" in title.lower()):
+                found[pid.value] = {
+                    "pid": int(pid.value),
+                    "process": base,
+                    "main_title": title or prev.get("main_title", ""),
+                }
         return True
 
     EnumWindows(_cb, 0)
@@ -155,18 +196,8 @@ def find_unreal_pids(process_names: list[str]) -> list[dict[str, Any]]:
 def _child_buttons(hwnd: int) -> list[dict[str, Any]]:
     buttons: list[dict[str, Any]] = []
     action_labels = {
-        "ok",
-        "cancel",
-        "yes",
-        "no",
-        "close",
-        "retry",
-        "ignore",
-        "continue",
-        "save",
-        "don't save",
-        "dont save",
-        "apply",
+        "ok", "cancel", "yes", "no", "close", "retry", "ignore",
+        "continue", "save", "don't save", "dont save", "apply",
     }
 
     @EnumWindowsProc
@@ -175,8 +206,7 @@ def _child_buttons(hwnd: int) -> list[dict[str, Any]]:
         text = _window_text(child)
         if not text:
             return True
-        is_button = cls in ("button", "sbutton") or text.lower() in action_labels
-        if is_button:
+        if cls in ("button", "sbutton") or text.lower() in action_labels:
             buttons.append(
                 {
                     "hwnd": int(child),
@@ -199,9 +229,102 @@ def _child_buttons(hwnd: int) -> list[dict[str, Any]]:
     return uniq
 
 
+def _uia_button_names(hwnd: int) -> list[str]:
+    try:
+        import comtypes.client
+    except Exception:
+        return []
+    try:
+        mod = comtypes.client.GetModule("UIAutomationCore.dll")
+        uia = comtypes.client.CreateObject(
+            "{ff48dba4-60ef-4201-aa87-54103eef594e}",
+            interface=mod.IUIAutomation,
+        )
+        element = uia.ElementFromHandle(hwnd)
+        if not element:
+            return []
+        cond = uia.CreatePropertyCondition(
+            mod.UIA_ControlTypePropertyId, mod.UIA_ButtonControlTypeId
+        )
+        found = element.FindAll(mod.TreeScope_Descendants, cond)
+        names: list[str] = []
+        for i in range(int(found.Length)):
+            el = found.GetElement(i)
+            try:
+                name = str(el.CurrentName or "").strip()
+            except Exception:
+                name = ""
+            if name:
+                names.append(name)
+        return names
+    except Exception:
+        return []
+
+
+def _uia_invoke_button(hwnd: int, wanted_labels: list[str]) -> dict[str, Any] | None:
+    try:
+        import comtypes.client
+
+        mod = comtypes.client.GetModule("UIAutomationCore.dll")
+        uia = comtypes.client.CreateObject(
+            "{ff48dba4-60ef-4201-aa87-54103eef594e}",
+            interface=mod.IUIAutomation,
+        )
+        element = uia.ElementFromHandle(hwnd)
+        if not element:
+            return None
+        cond = uia.CreatePropertyCondition(
+            mod.UIA_ControlTypePropertyId, mod.UIA_ButtonControlTypeId
+        )
+        found = element.FindAll(mod.TreeScope_Descendants, cond)
+        wanted = [w.lower() for w in wanted_labels]
+        for i in range(int(found.Length)):
+            el = found.GetElement(i)
+            try:
+                name = str(el.CurrentName or "").strip()
+            except Exception:
+                continue
+            if not name:
+                continue
+            low = name.lower()
+            if low in wanted or any(w == low or w in low for w in wanted):
+                iface = el.GetCurrentPattern(mod.UIA_InvokePatternId)
+                if iface:
+                    pattern = iface.QueryInterface(mod.IUIAutomationInvokePattern)
+                    pattern.Invoke()
+                    return {"ok": True, "clicked": name, "method": "uia_invoke"}
+        return None
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"uia: {exc}", "method": "uia_invoke"}
+
+
 def find_dialogs(process_names: list[str]) -> list[dict[str, Any]]:
+    """Detect Win32 dialogs AND Unreal owned Slate UnrealWindow popups."""
     names = {n.lower() for n in process_names}
     dialogs: list[dict[str, Any]] = []
+    main_hwnds: set[int] = set()
+
+    @EnumWindowsProc
+    def _mark_main(hwnd, _lparam):
+        if not IsWindowVisible(hwnd):
+            return True
+        pid = wintypes.DWORD()
+        GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if not pid.value:
+            return True
+        if _pid_basename(pid.value).lower() not in names:
+            return True
+        owner = GetWindow(hwnd, GW_OWNER)
+        w, h = _window_size(hwnd)
+        title = _window_text(hwnd)
+        cls = _class_name(hwnd)
+        if not owner and w >= 800 and h >= 600 and (
+            cls == "UnrealWindow" or "unreal editor" in title.lower()
+        ):
+            main_hwnds.add(int(hwnd))
+        return True
+
+    EnumWindows(_mark_main, 0)
 
     @EnumWindowsProc
     def _cb(hwnd, _lparam):
@@ -215,82 +338,129 @@ def find_dialogs(process_names: list[str]) -> list[dict[str, Any]]:
         if base.lower() not in names:
             return True
 
+        hwnd_i = int(hwnd)
+        if hwnd_i in main_hwnds:
+            return True
+
         cls = _class_name(hwnd)
         title = _window_text(hwnd)
         owner = GetWindow(hwnd, GW_OWNER)
-        is_std_dialog = cls == "#32770"
-        # Owned visible windows with buttons are often UE message boxes / Slate dialogs
+        owner_i = int(owner) if owner else 0
+        w, h = _window_size(hwnd)
         buttons = _child_buttons(hwnd)
-        looks_modal = is_std_dialog or (bool(owner) and bool(buttons) and title)
-        if not looks_modal and buttons and title and title.lower() not in {
-            "unreal editor",
-            "cursor",
-        }:
-            # Heuristic: small titled window with OK/Cancel-like buttons
-            labels = {b["text"].lower() for b in buttons}
-            if labels & {"ok", "cancel", "yes", "no", "close", "retry", "don't save", "dont save"}:
-                looks_modal = True
+        title_l = title.lower()
+        title_hit = any(h in title_l for h in _TITLE_HINTS) if title_l else False
 
-        if looks_modal and (title or buttons):
-            dialogs.append(
-                {
-                    "hwnd": int(hwnd),
-                    "pid": int(pid.value),
-                    "process": base,
-                    "class": cls,
-                    "title": title,
-                    "owner_hwnd": int(owner) if owner else 0,
-                    "buttons": [{"text": b["text"], "enabled": b["enabled"]} for b in buttons],
-                    "_button_hwnds": {b["text"].lower(): b["hwnd"] for b in buttons},
-                }
-            )
+        is_std = cls == "#32770"
+        is_owned_slate = cls == "UnrealWindow" and owner_i != 0
+        # Owned Slate popup: Message Log, Blueprint Asset Compilation Error, etc.
+        slate_popup = is_owned_slate and (
+            title_hit or (100 <= w <= 1800 and 60 <= h <= 1400)
+        )
+        classic = is_std or (bool(buttons) and bool(title))
+
+        if not (classic or slate_popup):
+            return True
+
+        uia_names = _uia_button_names(hwnd_i)
+        button_rows = [
+            {"text": b["text"], "enabled": b["enabled"], "source": "win32"} for b in buttons
+        ]
+        for name in uia_names:
+            if name.lower() not in {b["text"].lower() for b in button_rows}:
+                button_rows.append({"text": name, "enabled": True, "source": "uia"})
+        button_rows.extend(
+            [
+                {"text": "OK/Enter (keyboard)", "enabled": True, "source": "keyboard"},
+                {"text": "Cancel/Esc (keyboard)", "enabled": True, "source": "keyboard"},
+            ]
+        )
+
+        dialogs.append(
+            {
+                "hwnd": hwnd_i,
+                "pid": int(pid.value),
+                "process": base,
+                "class": cls,
+                "title": title or "(untitled UnrealWindow)",
+                "owner_hwnd": owner_i,
+                "size": [w, h],
+                "kind": "slate" if is_owned_slate else ("win32" if is_std else "other"),
+                "buttons": button_rows,
+                "_button_hwnds": {b["text"].lower(): b["hwnd"] for b in buttons},
+                "_slate": bool(is_owned_slate),
+            }
+        )
         return True
 
     EnumWindows(_cb, 0)
+
+    def _score(d: dict[str, Any]) -> tuple:
+        t = (d.get("title") or "").lower()
+        pri = 0
+        if "error" in t or "compilation" in t or "compile" in t:
+            pri = 3
+        elif "warning" in t or "message" in t:
+            pri = 2
+        elif d.get("kind") == "slate":
+            pri = 1
+        area = (d.get("size") or [0, 0])[0] * (d.get("size") or [0, 0])[1]
+        return (-pri, -area)
+
+    dialogs.sort(key=_score)
     return dialogs
 
 
 def click_button(dialog: dict[str, Any], choice: str) -> dict[str, Any]:
-    """choice: accept|cancel|yes|no|close or exact button label."""
     mapping = {
         "accept": ["ok", "yes", "continue", "retry", "save", "apply"],
         "ok": ["ok"],
         "yes": ["yes"],
-        "cancel": ["cancel", "no", "close"],
+        "cancel": ["cancel", "close", "no"],
         "no": ["no"],
         "close": ["close", "cancel"],
     }
     wanted = (choice or "").strip().lower()
     candidates = mapping.get(wanted, [wanted])
-    hwnds: dict[str, int] = dialog.get("_button_hwnds") or {}
-    # Refresh buttons if stripped report lacked hwnd map
+    hwnd = int(dialog["hwnd"])
+    hwnds: dict[str, int] = dict(dialog.get("_button_hwnds") or {})
     if not hwnds:
-        fresh = _child_buttons(int(dialog["hwnd"]))
-        hwnds = {b["text"].lower(): b["hwnd"] for b in fresh}
+        hwnds = {b["text"].lower(): b["hwnd"] for b in _child_buttons(hwnd)}
 
-    target = None
-    matched = None
     for label in candidates:
         if label in hwnds:
-            target = hwnds[label]
-            matched = label
-            break
-    # exact / substring
-    if target is None:
-        for label, hwnd in hwnds.items():
-            if wanted == label or wanted in label:
-                target = hwnd
-                matched = label
-                break
-    if target is None:
+            SendMessageW(hwnds[label], BM_CLICK, 0, 0)
+            return {"ok": True, "clicked": label, "method": "win32_bm_click"}
+
+    uia = _uia_invoke_button(hwnd, candidates if wanted in mapping else [wanted])
+    if uia and uia.get("ok"):
+        return uia
+
+    try:
+        ShowWindow(hwnd, SW_RESTORE)
+        SetForegroundWindow(hwnd)
+        time.sleep(0.05)
+    except Exception:
+        pass
+
+    if wanted in ("cancel", "no", "close", "escape"):
+        _send_key(VK_ESCAPE)
         return {
-            "ok": False,
-            "error": f"No button matching {choice!r}",
-            "available": list(hwnds.keys()),
+            "ok": True,
+            "clicked": "Escape",
+            "method": "keyboard",
+            "hwnd": hwnd,
+            "note": "Slate/owned UnrealWindow — sent Escape",
         }
-    # Prefer BM_CLICK on button hwnd
-    SendMessageW(target, BM_CLICK, 0, 0)
-    return {"ok": True, "clicked": matched, "hwnd": int(target)}
+    _send_key(VK_RETURN)
+    return {
+        "ok": True,
+        "clicked": "Enter",
+        "method": "keyboard",
+        "hwnd": hwnd,
+        "note": "Slate/owned UnrealWindow — sent Enter (default accept)",
+        "uia_error": (uia or {}).get("error") if isinstance(uia, dict) else None,
+    }
 
 
 def load_config(path: Path | None = None) -> dict[str, Any]:
@@ -299,16 +469,14 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
         "mode": os.environ.get("UNREAL_WATCH_MODE", "report"),
         "auto_allowlist": ["OK", "Close"],
         "never_auto": [
-            "Don't Save",
-            "Dont Save",
-            "Delete",
-            "Overwrite",
-            "Checkout",
-            "Discard",
-            "Abort",
-            "No",
+            "Don't Save", "Dont Save", "Delete", "Overwrite",
+            "Checkout", "Discard", "Abort", "No",
         ],
-        "unreal_process_names": ["UnrealEditor"],
+        "unreal_process_names": [
+            "UnrealEditor",
+            "UnrealEditor-Win64-DebugGame",
+            "UnrealEditor-Win64-Debug",
+        ],
         "mcp_probe_host": "127.0.0.1",
         "mcp_probe_port": 8000,
         "rc_probe_host": "127.0.0.1",
@@ -350,7 +518,6 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
 
     processes = find_unreal_pids(names)
     dialogs_raw = find_dialogs(names)
-    # Strip private hwnd maps for JSON report copies
     dialogs_public = []
     for d in dialogs_raw:
         dialogs_public.append(
@@ -360,7 +527,15 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
                 "process": d["process"],
                 "class": d["class"],
                 "title": d["title"],
-                "buttons": d["buttons"],
+                "kind": d.get("kind"),
+                "size": d.get("size"),
+                "owner_hwnd": d.get("owner_hwnd"),
+                "buttons": [
+                    {"text": b.get("text"), "enabled": b.get("enabled"), "source": b.get("source")}
+                    for b in (d.get("buttons") or [])
+                    if b.get("source") != "keyboard"
+                ]
+                + [b for b in (d.get("buttons") or []) if b.get("source") == "keyboard"],
             }
         )
 
@@ -383,23 +558,23 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     )
     likely_blocked = modal_present or ports_up_no_reply
 
-    advice = []
+    advice: list[str] = []
     if not processes:
         advice.append("UnrealEditor process not found — start the editor.")
     elif modal_present:
+        titles = [d.get("title") for d in dialogs_public]
         advice.append(
-            "Modal/dialog detected. Do NOT spam Unreal MCP. "
-            "Call dismiss_dialog (accept/cancel/yes/no) or ask the user."
+            f"Owned Slate/Win32 dialog(s) detected: {titles}. "
+            "Do NOT spam Unreal MCP. Call dismiss_dialog(accept|cancel) or ask the user."
         )
     elif ports_up_no_reply:
         advice.append(
-            "MCP/RC ports listen but probes timed out — editor thread likely busy or nested UI. "
-            "Wait; do not open new Unreal MCP sessions."
+            "MCP/RC ports listen but probes timed out — editor thread likely busy or nested UI."
         )
     elif mcp.get("listening") or rc.get("listening"):
         advice.append("Editor appears responsive on probe — Unreal MCP should work.")
     else:
-        advice.append("Editor running but MCP/RC not listening — start MCP / WebControl.StartServer.")
+        advice.append("Editor running but MCP/RC not listening.")
 
     auto_action = None
     mode = str(cfg.get("mode", "report")).lower()
@@ -407,22 +582,41 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         allow = {str(x).lower() for x in (cfg.get("auto_allowlist") or [])}
         never = {str(x).lower() for x in (cfg.get("never_auto") or [])}
         dlg = dialogs_raw[0]
-        for b in dlg.get("buttons") or []:
-            label = str(b.get("text", "")).lower()
-            if label in never:
-                auto_action = {"skipped": True, "reason": f"never_auto matched {b.get('text')}"}
-                break
-            if label in allow and b.get("enabled", True):
-                auto_action = click_button(dlg, b["text"])
-                auto_action["mode"] = "auto_allowlist"
-                auto_action["dialog_title"] = dlg.get("title")
-                break
-        if auto_action is None:
-            auto_action = {
-                "skipped": True,
-                "reason": "no allowlisted button on dialog",
-                "buttons": [b.get("text") for b in dlg.get("buttons") or []],
-            }
+        # Prefer real button labels; never auto-Enter on unknown destructive titles
+        title_l = str(dlg.get("title") or "").lower()
+        if any(n in title_l for n in ("save", "delete", "overwrite", "checkout", "discard")):
+            auto_action = {"skipped": True, "reason": f"never auto title: {dlg.get('title')}"}
+        else:
+            clicked = False
+            for b in dlg.get("buttons") or []:
+                label = str(b.get("text", "")).lower()
+                if b.get("source") == "keyboard":
+                    continue
+                if label in never:
+                    auto_action = {"skipped": True, "reason": f"never_auto matched {b.get('text')}"}
+                    clicked = True
+                    break
+                if label in allow and b.get("enabled", True):
+                    auto_action = click_button(dlg, b["text"])
+                    auto_action["mode"] = "auto_allowlist"
+                    auto_action["dialog_title"] = dlg.get("title")
+                    clicked = True
+                    break
+            if not clicked and auto_action is None:
+                # Safe default for info/error OK dialogs: Enter
+                if "error" in title_l or "message" in title_l or "compilation" in title_l:
+                    if "ok" in allow or "close" in allow:
+                        auto_action = click_button(dlg, "accept")
+                        auto_action["mode"] = "auto_allowlist_keyboard"
+                        auto_action["dialog_title"] = dlg.get("title")
+                    else:
+                        auto_action = {"skipped": True, "reason": "report mode would apply; OK not allowlisted"}
+                else:
+                    auto_action = {
+                        "skipped": True,
+                        "reason": "no allowlisted button",
+                        "buttons": [b.get("text") for b in dlg.get("buttons") or []],
+                    }
 
     report = {
         "ok": True,
@@ -440,13 +634,12 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "likely_blocked": likely_blocked,
         "advice": advice,
         "agent_instruction": (
-            "STOP Unreal MCP retries. Use unreal-watch dismiss_dialog or ask the user "
-            "if modal.present. If only likely_blocked, wait then re-check once."
+            "STOP Unreal MCP retries. Modal/owned UnrealWindow detected — "
+            "dismiss_dialog(accept|cancel) or ask user."
             if likely_blocked
             else "Editor watch clear — Unreal MCP may be used."
         ),
         "auto_action": auto_action,
-        # private for dismiss_dialog in same process — not written to alert file
         "_dialogs_raw": dialogs_raw,
     }
 
@@ -455,7 +648,6 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         public = {k: v for k, v in report.items() if not k.startswith("_")}
         alert.write_text(json.dumps(public, indent=2) + "\n", encoding="utf-8")
         report["alert_path"] = str(alert)
-
     return report
 
 
@@ -476,13 +668,19 @@ def dismiss_dialog(
                 target = d
                 break
         if target is None:
-            return {"ok": False, "error": f"Dialog hwnd {hwnd} not found", "dialogs": [
-                {"hwnd": d["hwnd"], "title": d["title"], "buttons": d["buttons"]} for d in dialogs
-            ]}
+            return {
+                "ok": False,
+                "error": f"Dialog hwnd {hwnd} not found",
+                "dialogs": [
+                    {"hwnd": d["hwnd"], "title": d["title"], "kind": d.get("kind")}
+                    for d in dialogs
+                ],
+            }
     else:
         target = dialogs[0]
     result = click_button(target, choice)
     result["dialog_title"] = target.get("title")
     result["dialog_hwnd"] = target.get("hwnd")
+    result["kind"] = target.get("kind")
     result["available_buttons"] = [b.get("text") for b in target.get("buttons") or []]
     return result
