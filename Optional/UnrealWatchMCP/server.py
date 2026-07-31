@@ -2,7 +2,7 @@
 """Optional stdio MCP: Unreal dialog / lockup watcher (host-side).
 
 Tools: check_unreal, get_editor_status, wait_for_editor, dismiss_dialog,
-       get_watch_config, set_watch_config
+       dismiss_unreal_blocker, get_watch_config, set_watch_config
 
 Prefer the official ``mcp`` Python SDK (FastMCP) for Cursor discovery.
 CLI ``--check`` works with stdlib + ctypes only (no mcp package required).
@@ -27,7 +27,12 @@ if str(HERE) not in sys.path:
 import watch  # noqa: E402
 
 SERVER_NAME = "unreal-watch"
-SERVER_VERSION = "0.4.0"
+SERVER_VERSION = "0.5.0"
+
+_STATUS_ENUM = (
+    "ok|editor_offline|modal_blocked|crash_reporter|restore_packages|"
+    "ports_wedged|proxy_unhealthy"
+)
 
 
 def _public(report: dict[str, Any]) -> dict[str, Any]:
@@ -65,7 +70,7 @@ def _maybe_start_heartbeat() -> None:
 
 
 def _run_fastmcp() -> int:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.fastmcp import Context, FastMCP
 
     mcp = FastMCP(SERVER_NAME)
 
@@ -74,12 +79,10 @@ def _run_fastmcp() -> int:
         description=(
             "Host-side Unreal freeze/dialog detector. Does NOT use Unreal MCP tools. "
             "Call once when Unreal MCP times out, WinError 10061, or the editor seems stuck. "
-            "Returns status (ok|editor_offline|modal_blocked|ports_wedged|proxy_unhealthy), "
-            "abort_unreal_mcp, process status, native MCP :8000 probe, anti-thrash proxy "
-            ":8001 identity, RC probe, modal dialogs, likely_blocked, and agent_instruction. "
-            "If status=editor_offline: STOP — do not retry Unreal MCP. "
-            "Ensures :8001 proxy if missing — never kills/rebinds. "
-            "modal.blocking only when probes also fail."
+            f"Returns status ({_STATUS_ENUM}), abort_unreal_mcp, CrashReportClient, "
+            "Restore Packages / Slate modals, recover_tool, and agent_instruction "
+            "(STOP/RECOVER). If status=editor_offline: STOP — do not retry Unreal MCP. "
+            "Ensures :8001 proxy if missing — never kills/rebinds."
         ),
     )
     def check_unreal() -> dict[str, Any]:
@@ -89,8 +92,9 @@ def _run_fastmcp() -> int:
         name="get_editor_status",
         description=(
             "Compact editor status JSON (status, unreal_running, abort_unreal_mcp, "
-            "modal, agent_instruction). Prefer this for a quick poll; use check_unreal "
-            "for full probes."
+            "modal, crash_reporter_processes, recover_tool, agent_instruction). "
+            "Agent contract: call this BEFORE Unreal MCP batches; on modal_blocked / "
+            "crash_reporter / restore_packages call dismiss_unreal_blocker."
         ),
     )
     def get_editor_status() -> dict[str, Any]:
@@ -99,18 +103,72 @@ def _run_fastmcp() -> int:
     @mcp.tool(
         name="wait_for_editor",
         description=(
-            "Block until Unreal Editor is running and MCP/RC responds, or timeout. "
-            "Use after asking the user to launch the project. Default timeout 120s."
+            "Block until Unreal Editor is ready, a blocker appears, or timeout. "
+            "Returns early on modal_blocked / crash_reporter / restore_packages / "
+            "ports_wedged (wait_result=blocker:…) so agents can dismiss. "
+            "editor_offline keeps polling. Default timeout 120s. Emits MCP progress "
+            "notifications when the client supports them."
         ),
     )
-    def wait_for_editor(timeout_s: float = 120.0, poll_s: float = 2.0) -> dict[str, Any]:
-        return watch.wait_for_editor(timeout_s=timeout_s, poll_s=poll_s)
+    def wait_for_editor(
+        timeout_s: float = 120.0,
+        poll_s: float = 2.0,
+        return_on_blocker: bool = True,
+        ctx: Context | None = None,
+    ) -> dict[str, Any]:
+        progress_cb = None
+        if ctx is not None:
+
+            def progress_cb(ticks: int, status: str, _last: dict[str, Any]) -> None:
+                # Best-effort MCP progress notify; Cursor may ignore (still pull-based).
+                try:
+                    import asyncio
+
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(
+                        ctx.report_progress(
+                            progress=float(ticks),
+                            total=None,
+                            message=f"unreal-watch status={status}",
+                        )
+                    )
+                except Exception:
+                    pass
+
+        return watch.wait_for_editor(
+            timeout_s=timeout_s,
+            poll_s=poll_s,
+            return_on_blocker=return_on_blocker,
+            progress_cb=progress_cb,
+        )
+
+    @mcp.tool(
+        name="dismiss_unreal_blocker",
+        description=(
+            "Safely dismiss Crash Reporter / Restore Packages / blocking Slate-Win32 "
+            "dialogs. policy=safe_cancel (default: Escape/Cancel/Don't Restore/close CRC), "
+            "accept, restore_packages_skip, or crash_reporter_close. "
+            "Never clicks Delete / destructive buttons unless allow_destructive=true. "
+            "Returns status_after + followup get_editor_status."
+        ),
+    )
+    def dismiss_unreal_blocker(
+        policy: str = "safe_cancel",
+        allow_destructive: bool = False,
+        hwnd: Optional[int] = None,
+    ) -> dict[str, Any]:
+        return watch.dismiss_unreal_blocker(
+            policy=policy,
+            allow_destructive=allow_destructive,
+            hwnd=hwnd,
+        )
 
     @mcp.tool(
         name="dismiss_dialog",
         description=(
-            "Click a button on the detected Unreal dialog. "
-            "choice: accept|cancel|yes|no|close or exact button label. "
+            "Low-level: click a button on the detected Unreal dialog. "
+            "Prefer dismiss_unreal_blocker for safe defaults. "
+            "choice: accept|cancel|yes|no|close|dont_restore or exact button label. "
             "Optional hwnd from check_unreal.modal.dialogs[].hwnd."
         ),
     )
@@ -119,7 +177,7 @@ def _run_fastmcp() -> int:
 
     @mcp.tool(
         name="get_watch_config",
-        description="Return UnrealWatch mode (report|auto_allowlist) and allowlists.",
+        description="Return UnrealWatch mode (report|auto_allowlist), restore policy, allowlists.",
     )
     def get_watch_config() -> dict[str, Any]:
         return watch.load_config()
@@ -128,12 +186,14 @@ def _run_fastmcp() -> int:
         name="set_watch_config",
         description=(
             "Update watch mode. mode=report (agent stops / asks) or auto_allowlist "
-            "(auto-click only safe OK/Close-style buttons)."
+            "(auto-click only safe OK/Close-style buttons). "
+            "Optional restore_packages_policy=dont_restore|cancel|ask."
         ),
     )
     def set_watch_config(
         mode: Optional[str] = None,
         auto_allowlist: Optional[list[str]] = None,
+        restore_packages_policy: Optional[str] = None,
     ) -> dict[str, Any]:
         cfg = watch.load_config()
         if mode is not None:
@@ -143,6 +203,13 @@ def _run_fastmcp() -> int:
             cfg["mode"] = mode_l
         if isinstance(auto_allowlist, list):
             cfg["auto_allowlist"] = [str(x) for x in auto_allowlist]
+        if restore_packages_policy is not None:
+            pol = str(restore_packages_policy).lower()
+            if pol not in ("dont_restore", "don't_restore", "cancel", "ask", "skip"):
+                raise ValueError(
+                    "restore_packages_policy must be dont_restore|cancel|ask|skip"
+                )
+            cfg["restore_packages_policy"] = pol
         path = watch.save_config(cfg)
         return {"ok": True, "saved": str(path), "config": cfg}
 
@@ -207,8 +274,8 @@ TOOLS = [
         "name": "check_unreal",
         "description": (
             "Host-side Unreal freeze/dialog detector. Call on MCP timeout / 10061. "
-            "Returns status (ok|editor_offline|modal_blocked|ports_wedged|proxy_unhealthy) "
-            "and abort_unreal_mcp. Never treat offline as clear."
+            f"Returns status ({_STATUS_ENUM}) and abort_unreal_mcp. "
+            "Never treat offline as clear."
         ),
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
@@ -219,19 +286,40 @@ TOOLS = [
     },
     {
         "name": "wait_for_editor",
-        "description": "Block until editor is ready or timeout (default 120s).",
+        "description": (
+            "Block until editor ready, blocker, or timeout. "
+            "Returns early on modal/crash when return_on_blocker=true."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "timeout_s": {"type": "number", "default": 120.0},
                 "poll_s": {"type": "number", "default": 2.0},
+                "return_on_blocker": {"type": "boolean", "default": True},
+            },
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "dismiss_unreal_blocker",
+        "description": (
+            "Safe dismiss for crash reporter / restore packages / modals. "
+            "policy=safe_cancel|accept|restore_packages_skip|crash_reporter_close. "
+            "Never Delete without allow_destructive=true."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "policy": {"type": "string", "default": "safe_cancel"},
+                "allow_destructive": {"type": "boolean", "default": False},
+                "hwnd": {"type": "integer"},
             },
             "additionalProperties": False,
         },
     },
     {
         "name": "dismiss_dialog",
-        "description": "Click a button on the detected Unreal dialog.",
+        "description": "Low-level click on detected Unreal dialog (prefer dismiss_unreal_blocker).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -248,12 +336,13 @@ TOOLS = [
     },
     {
         "name": "set_watch_config",
-        "description": "Update watch mode (report|auto_allowlist).",
+        "description": "Update watch mode / restore_packages_policy.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "mode": {"type": "string", "enum": ["report", "auto_allowlist"]},
                 "auto_allowlist": {"type": "array", "items": {"type": "string"}},
+                "restore_packages_policy": {"type": "string"},
             },
             "additionalProperties": False,
         },
@@ -272,6 +361,17 @@ def _handle_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             watch.wait_for_editor(
                 timeout_s=float(args.get("timeout_s", 120.0)),
                 poll_s=float(args.get("poll_s", 2.0)),
+                return_on_blocker=bool(args.get("return_on_blocker", True)),
+            )
+        )
+    if name == "dismiss_unreal_blocker":
+        hwnd = args.get("hwnd")
+        hwnd_i = int(hwnd) if hwnd is not None else None
+        return _tool_result(
+            watch.dismiss_unreal_blocker(
+                policy=str(args.get("policy") or "safe_cancel"),
+                allow_destructive=bool(args.get("allow_destructive", False)),
+                hwnd=hwnd_i,
             )
         )
     if name == "dismiss_dialog":
@@ -290,6 +390,8 @@ def _handle_tool(name: str, arguments: dict[str, Any] | None) -> dict[str, Any]:
             cfg["mode"] = mode
         if isinstance(args.get("auto_allowlist"), list):
             cfg["auto_allowlist"] = [str(x) for x in args["auto_allowlist"]]
+        if args.get("restore_packages_policy") is not None:
+            cfg["restore_packages_policy"] = str(args["restore_packages_policy"]).lower()
         path = watch.save_config(cfg)
         return _tool_result({"ok": True, "saved": str(path), "config": cfg})
     raise ValueError(f"Unknown tool: {name}")
@@ -303,8 +405,6 @@ def _handle(msg: dict[str, Any]) -> dict[str, Any] | None:
 
     try:
         if method == "initialize":
-            # Stay on stable protocol — echoing newer versions without full
-            # capability support caused Cursor discovery timeouts.
             return {
                 "jsonrpc": "2.0",
                 "id": msg_id,

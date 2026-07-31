@@ -38,10 +38,67 @@ keybd_event = user32.keybd_event
 
 GW_OWNER = 4
 BM_CLICK = 0x00F5
+WM_CLOSE = 0x0010
 SW_RESTORE = 9
 VK_RETURN = 0x0D
 VK_ESCAPE = 0x1B
 KEYEVENTF_KEYUP = 0x0002
+
+# Status values returned to agents (STOP / RECOVER semantics).
+STATUS_OK = "ok"
+STATUS_EDITOR_OFFLINE = "editor_offline"
+STATUS_MODAL_BLOCKED = "modal_blocked"
+STATUS_CRASH_REPORTER = "crash_reporter"
+STATUS_RESTORE_PACKAGES = "restore_packages"
+STATUS_PORTS_WEDGED = "ports_wedged"
+STATUS_PROXY_UNHEALTHY = "proxy_unhealthy"
+
+BLOCKER_STATUSES = frozenset(
+    {
+        STATUS_MODAL_BLOCKED,
+        STATUS_CRASH_REPORTER,
+        STATUS_RESTORE_PACKAGES,
+        STATUS_PORTS_WEDGED,
+    }
+)
+
+_DESTRUCTIVE_LABELS = frozenset(
+    {
+        "delete",
+        "don't save",
+        "dont save",
+        "overwrite",
+        "checkout",
+        "discard",
+        "abort",
+        "force delete",
+        "yes to all",
+        "delete all",
+    }
+)
+
+_RESTORE_SKIP_LABELS = (
+    "don't restore",
+    "dont restore",
+    "do not restore",
+    "cancel",
+    "no",
+    "close",
+)
+
+_CRASH_CLOSE_LABELS = (
+    "close",
+    "cancel",
+    "don't send",
+    "dont send",
+    "no",
+    "quit",
+)
+
+_DEFAULT_CRASH_PROCESS_NAMES = (
+    "CrashReportClient",
+    "CrashReportClientEditor",
+)
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 TH32CS_SNAPPROCESS = 0x00000002
@@ -92,7 +149,58 @@ _TITLE_HINTS = (
     "live coding",
     "dialogue",
     "dialog",
+    "restore",
+    "package",
+    "packages",
+    "context menu",
+    "message box",
+    "message dialog",
 )
+
+_RESTORE_TITLE_HINTS = (
+    "restore package",
+    "restore packages",
+    "packages to restore",
+    "restore selected",
+)
+
+_CRASH_TITLE_HINTS = (
+    "crash report",
+    "crashreporter",
+    "unreal engine crash",
+    "send unattended",
+    "bug report",
+    "callstack",
+)
+
+
+def _title_matches(title: str, hints: tuple[str, ...]) -> bool:
+    t = (title or "").lower()
+    return bool(t) and any(h in t for h in hints)
+
+
+def _is_destructive_label(label: str) -> bool:
+    low = (label or "").strip().lower()
+    if not low:
+        return False
+    if low in _DESTRUCTIVE_LABELS:
+        return True
+    return any(d in low for d in ("delete", "overwrite", "checkout", "discard"))
+
+
+def _classify_blocker_kind(title: str, process: str = "") -> str:
+    """Classify a dialog/process into a blocker kind for status + dismiss policy."""
+    proc = (process or "").lower()
+    if "crashreport" in proc.replace(" ", ""):
+        return "crash_reporter"
+    if _title_matches(title, _CRASH_TITLE_HINTS):
+        return "crash_reporter"
+    if _title_matches(title, _RESTORE_TITLE_HINTS):
+        return "restore_packages"
+    title_l = (title or "").lower()
+    if "context menu" in title_l:
+        return "context_menu"
+    return "modal"
 
 
 def _window_text(hwnd: int) -> str:
@@ -473,9 +581,23 @@ def _uia_invoke_button(hwnd: int, wanted_labels: list[str]) -> dict[str, Any] | 
         return {"ok": False, "error": f"uia: {exc}", "method": "uia_invoke"}
 
 
-def find_dialogs(process_names: list[str]) -> list[dict[str, Any]]:
-    """Detect Win32 dialogs AND Unreal owned Slate UnrealWindow popups."""
+def find_crash_reporter_pids(process_names: list[str] | None = None) -> list[dict[str, Any]]:
+    """Find CrashReportClient / CrashReportClientEditor via process snapshot + windows."""
+    names = list(process_names or _DEFAULT_CRASH_PROCESS_NAMES)
+    return find_unreal_pids(names)
+
+
+def find_dialogs(
+    process_names: list[str],
+    extra_process_names: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Detect Win32 dialogs AND Unreal owned Slate UnrealWindow popups.
+
+    Also scans CrashReportClient windows when ``extra_process_names`` is set.
+    """
     names = {n.lower() for n in process_names}
+    if extra_process_names:
+        names |= {n.lower() for n in extra_process_names}
     dialogs: list[dict[str, Any]] = []
     main_hwnds: set[int] = set()
 
@@ -487,7 +609,11 @@ def find_dialogs(process_names: list[str]) -> list[dict[str, Any]]:
         GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
         if not pid.value:
             return True
-        if _pid_basename(pid.value).lower() not in names:
+        base = _pid_basename(pid.value)
+        if base.lower() not in names:
+            return True
+        # Crash reporter windows are all "dialogs" — never treat as main editor.
+        if "crashreport" in base.lower().replace(" ", ""):
             return True
         owner = GetWindow(hwnd, GW_OWNER)
         w, h = _window_size(hwnd)
@@ -525,16 +651,21 @@ def find_dialogs(process_names: list[str]) -> list[dict[str, Any]]:
         buttons = _child_buttons(hwnd)
         title_l = title.lower()
         title_hit = any(h in title_l for h in _TITLE_HINTS) if title_l else False
+        is_crash_proc = "crashreport" in base.lower().replace(" ", "")
 
         is_std = cls == "#32770"
         is_owned_slate = cls == "UnrealWindow" and owner_i != 0
         # Owned Slate popup: Message Log, Blueprint Asset Compilation Error, etc.
+        # Also catch compact context-menu-like owned windows (often untitled).
         slate_popup = is_owned_slate and (
-            title_hit or (100 <= w <= 1800 and 60 <= h <= 1400)
+            title_hit
+            or (100 <= w <= 1800 and 60 <= h <= 1400)
+            or (not title and 40 <= w <= 800 and 40 <= h <= 600)
         )
         classic = is_std or (bool(buttons) and bool(title))
+        crash_window = is_crash_proc and (is_std or cls == "UnrealWindow" or bool(title) or bool(buttons))
 
-        if not (classic or slate_popup):
+        if not (classic or slate_popup or crash_window):
             return True
 
         uia_names = _uia_button_names(hwnd_i)
@@ -551,16 +682,24 @@ def find_dialogs(process_names: list[str]) -> list[dict[str, Any]]:
             ]
         )
 
+        blocker_kind = _classify_blocker_kind(title, base)
         dialogs.append(
             {
                 "hwnd": hwnd_i,
                 "pid": int(pid.value),
                 "process": base,
                 "class": cls,
-                "title": title or "(untitled UnrealWindow)",
+                "title": title or (
+                    "(CrashReportClient)" if is_crash_proc else "(untitled UnrealWindow)"
+                ),
                 "owner_hwnd": owner_i,
                 "size": [w, h],
-                "kind": "slate" if is_owned_slate else ("win32" if is_std else "other"),
+                "kind": (
+                    "crash_reporter"
+                    if is_crash_proc or blocker_kind == "crash_reporter"
+                    else ("slate" if is_owned_slate else ("win32" if is_std else "other"))
+                ),
+                "blocker_kind": blocker_kind,
                 "buttons": button_rows,
                 "_button_hwnds": {b["text"].lower(): b["hwnd"] for b in buttons},
                 "_slate": bool(is_owned_slate),
@@ -571,9 +710,14 @@ def find_dialogs(process_names: list[str]) -> list[dict[str, Any]]:
     EnumWindows(_cb, 0)
 
     def _score(d: dict[str, Any]) -> tuple:
+        kind = d.get("blocker_kind") or ""
         t = (d.get("title") or "").lower()
         pri = 0
-        if "error" in t or "compilation" in t or "compile" in t:
+        if kind == "crash_reporter" or "crash" in t:
+            pri = 5
+        elif kind == "restore_packages":
+            pri = 4
+        elif "error" in t or "compilation" in t or "compile" in t:
             pri = 3
         elif "warning" in t or "message" in t:
             pri = 2
@@ -586,14 +730,27 @@ def find_dialogs(process_names: list[str]) -> list[dict[str, Any]]:
     return dialogs
 
 
+def _close_hwnd(hwnd: int) -> dict[str, Any]:
+    try:
+        ShowWindow(hwnd, SW_RESTORE)
+        SetForegroundWindow(hwnd)
+        time.sleep(0.03)
+    except Exception:
+        pass
+    SendMessageW(hwnd, WM_CLOSE, 0, 0)
+    return {"ok": True, "clicked": "WM_CLOSE", "method": "wm_close", "hwnd": int(hwnd)}
+
+
 def click_button(dialog: dict[str, Any], choice: str) -> dict[str, Any]:
     mapping = {
         "accept": ["ok", "yes", "continue", "retry", "save", "apply"],
         "ok": ["ok"],
         "yes": ["yes"],
-        "cancel": ["cancel", "close", "no"],
+        "cancel": ["cancel", "close", "no", "don't restore", "dont restore", "don't send", "dont send"],
         "no": ["no"],
         "close": ["close", "cancel"],
+        "dont_restore": ["don't restore", "dont restore", "do not restore", "cancel", "no"],
+        "don't_restore": ["don't restore", "dont restore", "do not restore", "cancel", "no"],
     }
     wanted = (choice or "").strip().lower()
     candidates = mapping.get(wanted, [wanted])
@@ -618,7 +775,7 @@ def click_button(dialog: dict[str, Any], choice: str) -> dict[str, Any]:
     except Exception:
         pass
 
-    if wanted in ("cancel", "no", "close", "escape"):
+    if wanted in ("cancel", "no", "close", "escape", "dont_restore", "don't_restore"):
         _send_key(VK_ESCAPE)
         return {
             "ok": True,
@@ -652,6 +809,11 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
             "UnrealEditor-Win64-DebugGame",
             "UnrealEditor-Win64-Debug",
         ],
+        "crash_reporter_process_names": list(_DEFAULT_CRASH_PROCESS_NAMES),
+        # Safe default for post-crash package restore: skip restore (Cancel / Don't Restore).
+        "restore_packages_policy": os.environ.get(
+            "UNREAL_WATCH_RESTORE_POLICY", "dont_restore"
+        ),
         "mcp_probe_host": "127.0.0.1",
         "mcp_probe_port": 8000,
         "proxy_probe_host": "127.0.0.1",
@@ -670,6 +832,9 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
     env_mode = os.environ.get("UNREAL_WATCH_MODE")
     if env_mode:
         defaults["mode"] = env_mode
+    env_restore = os.environ.get("UNREAL_WATCH_RESTORE_POLICY")
+    if env_restore:
+        defaults["restore_packages_policy"] = env_restore
     return defaults
 
 
@@ -687,34 +852,99 @@ def project_alert_path() -> Path | None:
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
+def _public_dialog(d: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "hwnd": d["hwnd"],
+        "pid": d["pid"],
+        "process": d["process"],
+        "class": d["class"],
+        "title": d["title"],
+        "kind": d.get("kind"),
+        "blocker_kind": d.get("blocker_kind")
+        or _classify_blocker_kind(str(d.get("title") or ""), str(d.get("process") or "")),
+        "size": d.get("size"),
+        "owner_hwnd": d.get("owner_hwnd"),
+        "buttons": [
+            {"text": b.get("text"), "enabled": b.get("enabled"), "source": b.get("source")}
+            for b in (d.get("buttons") or [])
+            if b.get("source") != "keyboard"
+        ]
+        + [b for b in (d.get("buttons") or []) if b.get("source") == "keyboard"],
+    }
+
+
+def _instruction_for_status(
+    status: str,
+    *,
+    titles: list[Any] | None = None,
+) -> str:
+    """STOP / RECOVER agent instructions keyed by status enum."""
+    titles = titles or []
+    if status == STATUS_EDITOR_OFFLINE:
+        return (
+            "STOP. Unreal Editor is not running (status=editor_offline). "
+            "Do not retry Unreal MCP. RECOVER: ask the user to launch the project, "
+            "then call wait_for_editor (returns early on modal/crash)."
+        )
+    if status == STATUS_CRASH_REPORTER:
+        return (
+            "STOP Unreal MCP retries. status=crash_reporter — Crash Report Client "
+            f"and/or crash UI present ({titles}). RECOVER: call dismiss_unreal_blocker "
+            "(safe_cancel closes/cancels; never auto-sends reports). Then wait_for_editor "
+            "or ask the user to relaunch if the editor exited."
+        )
+    if status == STATUS_RESTORE_PACKAGES:
+        return (
+            "STOP Unreal MCP retries. status=restore_packages — Restore Packages dialog "
+            f"detected ({titles}). RECOVER: call dismiss_unreal_blocker "
+            "(default policy=dont_restore / Cancel). Never click Delete without "
+            "allow_destructive=true."
+        )
+    if status == STATUS_MODAL_BLOCKED:
+        return (
+            "STOP Unreal MCP retries. status=modal_blocked — blocking Slate/Win32 dialog "
+            f"or context menu ({titles}). RECOVER: call dismiss_unreal_blocker "
+            "(safe_cancel → Escape/Cancel) or ask the user. Never kill/rebind :8001."
+        )
+    if status == STATUS_PORTS_WEDGED:
+        return (
+            "STOP Unreal MCP retries. status=ports_wedged — editor ports listen but do not "
+            "answer (nested UI / busy game thread). RECOVER: call get_editor_status; if a "
+            "modal appeared use dismiss_unreal_blocker; else wait / ask user. "
+            "Never kill/rebind :8001."
+        )
+    if status == STATUS_PROXY_UNHEALTHY:
+        return (
+            "Editor appears up but anti-thrash proxy :8001 is not identified "
+            "(status=proxy_unhealthy). RECOVER: run Optional/UnrealMcpProxy --ensure-http; "
+            "do not point Cursor at raw :8000; never kill/rebind an unknown :8001 listener."
+        )
+    if status == STATUS_OK:
+        return (
+            "Editor watch clear — Unreal MCP via :8001 may be used. "
+            "On address-in-use / WinError 10048: verify /health and reuse; never kill proxy. "
+            "Contract: call get_editor_status before Unreal MCP batches; on modal_blocked / "
+            "crash_reporter / restore_packages call dismiss_unreal_blocker."
+        )
+    return (
+        f"status={status}. Follow advice[]; do not spam Unreal MCP. "
+        "RECOVER: get_editor_status → dismiss_unreal_blocker if blocked. "
+        "Never kill/rebind :8001."
+    )
+
 
 def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     cfg = cfg or load_config()
     timeout = float(cfg.get("probe_timeout_s", 2.0))
     names = list(cfg.get("unreal_process_names") or ["UnrealEditor"])
+    crash_names = list(
+        cfg.get("crash_reporter_process_names") or _DEFAULT_CRASH_PROCESS_NAMES
+    )
 
     processes = find_unreal_pids(names)
-    dialogs_raw = find_dialogs(names)
-    dialogs_public = []
-    for d in dialogs_raw:
-        dialogs_public.append(
-            {
-                "hwnd": d["hwnd"],
-                "pid": d["pid"],
-                "process": d["process"],
-                "class": d["class"],
-                "title": d["title"],
-                "kind": d.get("kind"),
-                "size": d.get("size"),
-                "owner_hwnd": d.get("owner_hwnd"),
-                "buttons": [
-                    {"text": b.get("text"), "enabled": b.get("enabled"), "source": b.get("source")}
-                    for b in (d.get("buttons") or [])
-                    if b.get("source") != "keyboard"
-                ]
-                + [b for b in (d.get("buttons") or []) if b.get("source") == "keyboard"],
-            }
-        )
+    crash_processes = find_crash_reporter_pids(crash_names)
+    dialogs_raw = find_dialogs(names, extra_process_names=crash_names)
+    dialogs_public = [_public_dialog(d) for d in dialogs_raw]
 
     mcp = _http_probe(
         str(cfg.get("mcp_probe_host", "127.0.0.1")),
@@ -724,7 +954,6 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     )
     proxy_host = str(cfg.get("proxy_probe_host", "127.0.0.1"))
     proxy_port = int(cfg.get("proxy_probe_port", 8001))
-    # Ensure sidecar once (identity-aware; never kills/rebinds).
     http_proxy = ensure_http_proxy_sidecar(proxy_host, proxy_port)
     proxy = probe_proxy_health(proxy_host, proxy_port, timeout)
     rc = _http_probe(
@@ -739,66 +968,92 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         rc.get("listening") and not rc.get("responded")
     )
     editor_responsive = bool(mcp.get("responded") or rc.get("responded"))
-    # Owned UnrealWindows include harmless floating tabs (Message Log, Output Log).
-    # A window only proves blockage when the editor also stops serving probes —
-    # otherwise reporting it as modal stalls agents on a healthy editor.
-    modal_blocking = modal_present and not editor_responsive
+    blocker_kinds = {str(d.get("blocker_kind") or "") for d in dialogs_public}
+    has_crash_dialog = "crash_reporter" in blocker_kinds
+    visible_crc = [p for p in crash_processes if p.get("has_window")]
+    # Orphan CrashReportClientEditor PIDs with no HWND are common after a prior
+    # crash; do not block a responsive editor on those alone.
+    has_crash_ui = bool(has_crash_dialog) or bool(visible_crc) or (
+        bool(crash_processes) and not bool(processes)
+    )
+    has_restore = "restore_packages" in blocker_kinds
+    modal_blocking = (modal_present and not editor_responsive) or has_crash_ui or has_restore
 
     unreal_running = bool(processes)
     abort_unreal_mcp = False
-    if not unreal_running:
-        status = "editor_offline"
+    # Priority: crash_reporter > restore_packages > offline > modal > wedged > proxy > ok
+    if has_crash_ui:
+        status = STATUS_CRASH_REPORTER
         likely_blocked = True
         abort_unreal_mcp = True
-    elif modal_blocking:
-        status = "modal_blocked"
+    elif has_restore:
+        status = STATUS_RESTORE_PACKAGES
+        likely_blocked = True
+        abort_unreal_mcp = True
+    elif not unreal_running:
+        status = STATUS_EDITOR_OFFLINE
+        likely_blocked = True
+        abort_unreal_mcp = True
+    elif modal_present and not editor_responsive:
+        status = STATUS_MODAL_BLOCKED
         likely_blocked = True
         abort_unreal_mcp = True
     elif ports_up_no_reply:
-        status = "ports_wedged"
+        status = STATUS_PORTS_WEDGED
         likely_blocked = True
         abort_unreal_mcp = True
     elif not proxy.get("ok") and (mcp.get("listening") or rc.get("listening")):
-        status = "proxy_unhealthy"
+        status = STATUS_PROXY_UNHEALTHY
         likely_blocked = False
         abort_unreal_mcp = False
     else:
-        status = "ok"
+        status = STATUS_OK
         likely_blocked = False
         abort_unreal_mcp = False
 
     advice: list[str] = []
     titles = [d.get("title") for d in dialogs_public]
-    if not unreal_running:
+    if has_crash_ui:
+        advice.append(
+            f"Crash reporter process/UI detected (pids={[p.get('pid') for p in crash_processes]}, "
+            f"dialogs={titles}). Call dismiss_unreal_blocker; do not spam Unreal MCP."
+        )
+    if has_restore:
+        policy = str(cfg.get("restore_packages_policy") or "dont_restore")
+        advice.append(
+            f"Restore Packages dialog detected: {titles}. "
+            f"Policy={policy} — dismiss_unreal_blocker skips restore by default."
+        )
+    if not unreal_running and not has_crash_ui:
         advice.append("UnrealEditor process not found — start the editor.")
-    elif modal_blocking:
+    elif status == STATUS_MODAL_BLOCKED:
         advice.append(
             f"Owned Slate/Win32 dialog(s) detected: {titles} and MCP/RC are not "
-            "answering. Do NOT spam Unreal MCP. Call dismiss_dialog(accept|cancel) "
+            "answering. Do NOT spam Unreal MCP. Call dismiss_unreal_blocker "
             "or ask the user."
         )
-    elif ports_up_no_reply:
+    elif ports_up_no_reply and status == STATUS_PORTS_WEDGED:
         advice.append(
             "MCP/RC ports listen but probes timed out — editor thread likely busy or nested UI. "
             "Do NOT kill/rebind :8001."
         )
-    elif modal_present:
+    elif modal_present and status == STATUS_OK:
         advice.append(
             f"Window(s) detected: {titles}, but MCP/RC answered — the editor is "
             "responsive and these are not blocking. Proceed with ONE batched MCP "
-            "call; only dismiss_dialog if calls actually fail."
+            "call; only dismiss_unreal_blocker if calls actually fail."
         )
-    elif proxy.get("ok") and (mcp.get("listening") or rc.get("listening")):
+    elif status == STATUS_OK and proxy.get("ok") and (mcp.get("listening") or rc.get("listening")):
         advice.append(
             "Anti-thrash proxy :8001 healthy and editor ports up — use Cursor MCP via :8001; "
             "never kill/rebind the proxy on WinError 10048."
         )
-    elif mcp.get("listening") or rc.get("listening"):
+    elif status == STATUS_PROXY_UNHEALTHY:
         advice.append(
             "Editor MCP/RC listening but proxy identity not confirmed — "
             "run Optional/UnrealMcpProxy --ensure-http; do not point Cursor at raw :8000."
         )
-    else:
+    elif unreal_running and not editor_responsive and status == STATUS_OK:
         advice.append("Editor running but MCP/RC not listening.")
 
     proxy_health = proxy.get("health") if isinstance(proxy.get("health"), dict) else {}
@@ -815,53 +1070,22 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
             "Do not switch to RC yet and do not kill :8001."
         )
 
-    if status == "editor_offline":
-        agent_instruction = (
-            "STOP. Unreal Editor is not running (status=editor_offline). "
-            "Do not retry Unreal MCP. Ask the user to launch the project, "
-            "or call wait_for_editor after they start it."
-        )
-    elif status == "modal_blocked":
-        agent_instruction = (
-            "STOP Unreal MCP retries. status=modal_blocked — dismiss_dialog(accept|cancel) "
-            "or ask the user. Never kill/rebind :8001."
-        )
-    elif status == "ports_wedged":
-        agent_instruction = (
-            "STOP Unreal MCP retries. status=ports_wedged — editor ports listen but do not "
-            "answer. Wait / ask user; never kill/rebind :8001."
-        )
-    elif status == "proxy_unhealthy":
-        agent_instruction = (
-            "Editor appears up but anti-thrash proxy :8001 is not identified. "
-            "Run Optional/UnrealMcpProxy --ensure-http; do not point Cursor at raw :8000; "
-            "never kill/rebind an unknown :8001 listener."
-        )
-    elif (
-        unreal_running
-        and editor_responsive
-        and not modal_blocking
-        and status == "ok"
-    ):
-        agent_instruction = (
-            "Editor watch clear — Unreal MCP via :8001 may be used. "
-            "On address-in-use / WinError 10048: verify /health and reuse; never kill proxy."
-        )
-    else:
-        agent_instruction = (
-            f"status={status}. Follow advice[]; do not spam Unreal MCP. "
-            "Never kill/rebind :8001."
-        )
+    agent_instruction = _instruction_for_status(status, titles=titles)
 
     auto_action = None
     mode = str(cfg.get("mode", "report")).lower()
-    if mode == "auto_allowlist" and dialogs_raw:
+    if mode == "auto_allowlist" and dialogs_raw and status not in (
+        STATUS_CRASH_REPORTER,
+        STATUS_RESTORE_PACKAGES,
+    ):
         allow = {str(x).lower() for x in (cfg.get("auto_allowlist") or [])}
         never = {str(x).lower() for x in (cfg.get("never_auto") or [])}
         dlg = dialogs_raw[0]
-        # Prefer real button labels; never auto-Enter on unknown destructive titles
         title_l = str(dlg.get("title") or "").lower()
-        if any(n in title_l for n in ("save", "delete", "overwrite", "checkout", "discard")):
+        if any(
+            n in title_l
+            for n in ("save", "delete", "overwrite", "checkout", "discard", "restore")
+        ):
             auto_action = {"skipped": True, "reason": f"never auto title: {dlg.get('title')}"}
         else:
             clicked = False
@@ -869,8 +1093,11 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
                 label = str(b.get("text", "")).lower()
                 if b.get("source") == "keyboard":
                     continue
-                if label in never:
-                    auto_action = {"skipped": True, "reason": f"never_auto matched {b.get('text')}"}
+                if label in never or _is_destructive_label(label):
+                    auto_action = {
+                        "skipped": True,
+                        "reason": f"never_auto matched {b.get('text')}",
+                    }
                     clicked = True
                     break
                 if label in allow and b.get("enabled", True):
@@ -880,14 +1107,16 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
                     clicked = True
                     break
             if not clicked and auto_action is None:
-                # Safe default for info/error OK dialogs: Enter
                 if "error" in title_l or "message" in title_l or "compilation" in title_l:
                     if "ok" in allow or "close" in allow:
                         auto_action = click_button(dlg, "accept")
                         auto_action["mode"] = "auto_allowlist_keyboard"
                         auto_action["dialog_title"] = dlg.get("title")
                     else:
-                        auto_action = {"skipped": True, "reason": "report mode would apply; OK not allowlisted"}
+                        auto_action = {
+                            "skipped": True,
+                            "reason": "report mode would apply; OK not allowlisted",
+                        }
                 else:
                     auto_action = {
                         "skipped": True,
@@ -903,10 +1132,12 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "unreal_running": unreal_running,
         "abort_unreal_mcp": abort_unreal_mcp,
         "processes": processes,
+        "crash_reporter_processes": crash_processes,
         "modal": {
             "present": modal_present,
             "blocking": modal_blocking,
             "count": len(dialogs_public),
+            "blocker_kinds": sorted(k for k in blocker_kinds if k),
             "dialogs": dialogs_public,
         },
         "editor_responsive": editor_responsive,
@@ -917,6 +1148,12 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "likely_blocked": likely_blocked,
         "advice": advice,
         "agent_instruction": agent_instruction,
+        "recover_tool": (
+            "dismiss_unreal_blocker"
+            if status
+            in (STATUS_MODAL_BLOCKED, STATUS_CRASH_REPORTER, STATUS_RESTORE_PACKAGES)
+            else ("wait_for_editor" if status == STATUS_EDITOR_OFFLINE else None)
+        ),
         "auto_action": auto_action,
         "_dialogs_raw": dialogs_raw,
     }
@@ -941,8 +1178,10 @@ def get_editor_status(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "editor_responsive",
         "likely_blocked",
         "modal",
+        "crash_reporter_processes",
         "advice",
         "agent_instruction",
+        "recover_tool",
         "alert_path",
         "processes",
         "mcp_probe",
@@ -955,20 +1194,40 @@ def get_editor_status(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
 def wait_for_editor(
     timeout_s: float = 120.0,
     poll_s: float = 2.0,
+    return_on_blocker: bool = True,
     cfg: dict[str, Any] | None = None,
+    progress_cb: Any | None = None,
 ) -> dict[str, Any]:
-    """Poll until editor is running and MCP/RC answers, or timeout."""
+    """Poll until editor is ready, a blocker appears, or timeout.
+
+    Returns early on modal/crash/restore when ``return_on_blocker`` is True so
+    agents can call ``dismiss_unreal_blocker`` instead of waiting out the clock.
+    ``editor_offline`` keeps polling (user may still be launching).
+    """
     cfg = cfg or load_config()
     timeout_s = max(0.0, float(timeout_s))
     poll_s = max(0.2, float(poll_s))
     deadline = time.time() + timeout_s
     last: dict[str, Any] = {}
+    ticks = 0
     while True:
         last = check_unreal(cfg)
-        if last.get("status") == "ok" and last.get("unreal_running") and last.get(
-            "editor_responsive"
+        ticks += 1
+        status = str(last.get("status") or "")
+        if progress_cb is not None:
+            try:
+                progress_cb(ticks, status, last)
+            except Exception:  # noqa: BLE001
+                pass
+        if (
+            status == STATUS_OK
+            and last.get("unreal_running")
+            and last.get("editor_responsive")
         ):
             last["wait_result"] = "ready"
+            return {k: v for k, v in last.items() if not k.startswith("_")}
+        if return_on_blocker and status in BLOCKER_STATUSES:
+            last["wait_result"] = f"blocker:{status}"
             return {k: v for k, v in last.items() if not k.startswith("_")}
         if time.time() >= deadline:
             last["wait_result"] = "timeout"
@@ -996,7 +1255,6 @@ def start_heartbeat_thread(interval_s: float) -> Any:
             except Exception:  # noqa: BLE001
                 pass
 
-    # Immediate first write so agents have a file before the first interval.
     try:
         run_heartbeat_once()
     except Exception:  # noqa: BLE001
@@ -1013,7 +1271,10 @@ def dismiss_dialog(
 ) -> dict[str, Any]:
     cfg = cfg or load_config()
     names = list(cfg.get("unreal_process_names") or ["UnrealEditor"])
-    dialogs = find_dialogs(names)
+    crash_names = list(
+        cfg.get("crash_reporter_process_names") or _DEFAULT_CRASH_PROCESS_NAMES
+    )
+    dialogs = find_dialogs(names, extra_process_names=crash_names)
     if not dialogs:
         return {"ok": False, "error": "No Unreal dialog detected"}
     target = None
@@ -1037,5 +1298,175 @@ def dismiss_dialog(
     result["dialog_title"] = target.get("title")
     result["dialog_hwnd"] = target.get("hwnd")
     result["kind"] = target.get("kind")
+    result["blocker_kind"] = target.get("blocker_kind")
     result["available_buttons"] = [b.get("text") for b in target.get("buttons") or []]
     return result
+
+
+def dismiss_unreal_blocker(
+    policy: str = "safe_cancel",
+    allow_destructive: bool = False,
+    hwnd: int | None = None,
+    cfg: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Safely dismiss known Unreal blockers (dialogs, crash reporter, restore packages).
+
+    Policies:
+      - safe_cancel (default): Escape / Cancel / Close / Don't Restore / Don't Send
+      - accept: OK / Yes / Enter (still refuses Delete unless allow_destructive)
+      - restore_packages_skip: force Don't Restore / Cancel for Restore Packages
+      - crash_reporter_close: close Crash Report Client (Cancel / WM_CLOSE)
+
+    Never auto-clicks destructive labels (Delete, Overwrite, …) unless
+    ``allow_destructive=True``.
+    """
+    cfg = cfg or load_config()
+    policy_l = (policy or "safe_cancel").strip().lower()
+    names = list(cfg.get("unreal_process_names") or ["UnrealEditor"])
+    crash_names = list(
+        cfg.get("crash_reporter_process_names") or _DEFAULT_CRASH_PROCESS_NAMES
+    )
+    dialogs = find_dialogs(names, extra_process_names=crash_names)
+    crash_procs = find_crash_reporter_pids(crash_names)
+
+    if not dialogs and not crash_procs:
+        return {
+            "ok": False,
+            "error": "No Unreal blocker detected",
+            "hint": "Call get_editor_status; if status=ok there is nothing to dismiss.",
+        }
+
+    target: dict[str, Any] | None = None
+    if hwnd:
+        for d in dialogs:
+            if int(d["hwnd"]) == int(hwnd):
+                target = d
+                break
+        if target is None:
+            return {
+                "ok": False,
+                "error": f"Dialog hwnd {hwnd} not found",
+                "dialogs": [
+                    {
+                        "hwnd": d["hwnd"],
+                        "title": d["title"],
+                        "blocker_kind": d.get("blocker_kind"),
+                    }
+                    for d in dialogs
+                ],
+            }
+    elif dialogs:
+        target = dialogs[0]
+
+    restore_policy = str(cfg.get("restore_packages_policy") or "dont_restore").lower()
+    blocker_kind = (target or {}).get("blocker_kind") or (
+        "crash_reporter" if crash_procs else "modal"
+    )
+
+    if policy_l in ("restore_packages_skip", "dont_restore", "don't_restore") or (
+        blocker_kind == "restore_packages"
+        and policy_l == "safe_cancel"
+        and restore_policy in ("dont_restore", "don't_restore", "cancel", "skip")
+    ):
+        choice = "dont_restore"
+    elif policy_l in ("crash_reporter_close",) or (
+        blocker_kind == "crash_reporter" and policy_l == "safe_cancel"
+    ):
+        choice = "close"
+    elif policy_l in ("accept", "ok", "yes"):
+        choice = "accept"
+    else:
+        choice = "cancel"
+
+    if target and not allow_destructive:
+        real = [
+            str(b.get("text") or "")
+            for b in (target.get("buttons") or [])
+            if b.get("source") != "keyboard" and b.get("enabled", True)
+        ]
+        destructive = [t for t in real if _is_destructive_label(t)]
+        if choice in ("accept", "yes", "ok"):
+            safe_accept = [
+                t
+                for t in real
+                if t.lower() in ("ok", "yes", "continue", "close", "retry")
+                and not _is_destructive_label(t)
+            ]
+            title_l = str(target.get("title") or "").lower()
+            title_destructive = any(
+                w in title_l for w in ("delete", "overwrite", "checkout", "discard")
+            )
+            if destructive and (not safe_accept or title_destructive):
+                return {
+                    "ok": False,
+                    "error": "Refused destructive dismiss without allow_destructive=true",
+                    "destructive_buttons": destructive,
+                    "dialog_title": target.get("title"),
+                    "blocker_kind": blocker_kind,
+                    "hint": "Pass allow_destructive=true only when the user explicitly confirmed.",
+                }
+        for t in real:
+            if _is_destructive_label(t) and choice == t.lower():
+                return {
+                    "ok": False,
+                    "error": (
+                        f"Refused to click destructive '{t}' without "
+                        "allow_destructive=true"
+                    ),
+                    "dialog_title": target.get("title"),
+                    "blocker_kind": blocker_kind,
+                }
+
+    actions: list[dict[str, Any]] = []
+    if target:
+        if blocker_kind == "restore_packages" and choice == "dont_restore":
+            result = click_button(target, "dont_restore")
+            if result.get("method") == "keyboard":
+                uia = _uia_invoke_button(int(target["hwnd"]), list(_RESTORE_SKIP_LABELS))
+                if uia and uia.get("ok"):
+                    result = uia
+            actions.append(result)
+        elif blocker_kind == "crash_reporter":
+            result = click_button(target, choice if choice != "accept" else "close")
+            if not result.get("ok") or result.get("method") == "keyboard":
+                uia = _uia_invoke_button(int(target["hwnd"]), list(_CRASH_CLOSE_LABELS))
+                if uia and uia.get("ok"):
+                    result = uia
+                else:
+                    result = _close_hwnd(int(target["hwnd"]))
+            actions.append(result)
+        else:
+            if choice == "accept":
+                actions.append(click_button(target, "accept"))
+            else:
+                actions.append(click_button(target, choice))
+        actions[-1]["dialog_title"] = target.get("title")
+        actions[-1]["dialog_hwnd"] = target.get("hwnd")
+        actions[-1]["blocker_kind"] = blocker_kind
+    elif crash_procs:
+        crc_dialogs = find_dialogs(["__none__"], extra_process_names=crash_names)
+        if crc_dialogs:
+            actions.append(_close_hwnd(int(crc_dialogs[0]["hwnd"])))
+            actions[-1]["dialog_title"] = crc_dialogs[0].get("title")
+            actions[-1]["blocker_kind"] = "crash_reporter"
+        else:
+            return {
+                "ok": False,
+                "error": "CrashReportClient process found but no dismissible window",
+                "crash_reporter_processes": crash_procs,
+                "hint": "Ask the user to close the crash reporter, then relaunch the editor.",
+            }
+
+    primary = actions[0] if actions else {"ok": False, "error": "no action"}
+    followup = get_editor_status(cfg)
+    return {
+        "ok": bool(primary.get("ok")),
+        "policy": policy_l,
+        "allow_destructive": bool(allow_destructive),
+        "blocker_kind": blocker_kind,
+        "action": primary,
+        "actions": actions,
+        "status_after": followup.get("status"),
+        "agent_instruction": followup.get("agent_instruction"),
+        "followup": followup,
+    }
