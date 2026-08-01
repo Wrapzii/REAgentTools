@@ -205,6 +205,99 @@ class OfflineSemanticsTests(unittest.TestCase):
         self.assertIn("dont_restore", instr.lower().replace("'", "").replace("\u2019", ""))
         self.assertIn("allow_destructive", instr)
 
+    def test_import_content_title_and_instruction(self) -> None:
+        """Interchange Import Content → import_dialog STOP/RECOVER (always blocking)."""
+        self.assertEqual(watch._classify_blocker_kind("Import Content"), "import_dialog")
+        self.assertEqual(watch._classify_blocker_kind("FBX Import Options"), "import_dialog")
+        self.assertTrue(watch._title_matches("Import Content", watch._IMPORT_TITLE_HINTS))
+
+        procs = [{"pid": 1, "process": "UnrealEditor", "main_title": "Ed", "has_window": True}]
+        dialogs = [
+            {
+                "hwnd": 55,
+                "pid": 1,
+                "process": "UnrealEditor",
+                "class": "UnrealWindow",
+                "title": "Import Content",
+                "kind": "import_dialog",
+                "blocker_kind": "import_dialog",
+                "size": [1000, 700],
+                "owner_hwnd": 1,
+                "buttons": [
+                    {"text": "Import", "enabled": True, "source": "uia"},
+                    {"text": "Cancel", "enabled": True, "source": "uia"},
+                    {"text": "OK/Enter (keyboard)", "enabled": True, "source": "keyboard"},
+                ],
+                "_button_hwnds": {},
+                "_slate": True,
+            }
+        ]
+        with mock.patch.object(watch, "find_unreal_pids", return_value=procs), mock.patch.object(
+            watch, "find_crash_reporter_pids", return_value=[]
+        ), mock.patch.object(watch, "find_dialogs", return_value=dialogs), mock.patch.object(
+            watch,
+            "_http_probe",
+            side_effect=[_probe_up(), _probe_down()],
+        ), mock.patch.object(
+            watch, "ensure_http_proxy_sidecar", return_value={"ok": True}
+        ), mock.patch.object(
+            watch, "probe_proxy_health", return_value={"ok": True}
+        ), mock.patch.object(watch, "project_alert_path", return_value=None):
+            report = watch.check_unreal()
+
+        self.assertEqual(report["status"], "import_dialog")
+        self.assertNotEqual(report["status"], "ok")
+        self.assertTrue(report["modal"]["blocking"])
+        self.assertTrue(report["abort_unreal_mcp"])
+        self.assertIn("import_dialog", report["modal"]["blocker_kinds"])
+        self.assertEqual(report["recover_tool"], "dismiss_unreal_blocker")
+        instr = report["agent_instruction"]
+        self.assertIn("STOP", instr)
+        self.assertIn("import_dialog", instr)
+        self.assertIn("dismiss_unreal_blocker", instr)
+        self.assertIn("Import", instr)
+        self.assertIn("RECOVER", instr)
+        self.assertNotIn("watch clear", instr.lower())
+
+    def test_dismiss_import_content_clicks_import(self) -> None:
+        dialogs = [
+            {
+                "hwnd": 55,
+                "pid": 1,
+                "process": "UnrealEditor",
+                "class": "UnrealWindow",
+                "title": "Import Content",
+                "kind": "import_dialog",
+                "blocker_kind": "import_dialog",
+                "size": [1000, 700],
+                "owner_hwnd": 1,
+                "buttons": [
+                    {"text": "Import", "enabled": True, "source": "uia"},
+                    {"text": "Cancel", "enabled": True, "source": "uia"},
+                ],
+                "_button_hwnds": {},
+                "_slate": True,
+            }
+        ]
+        with mock.patch.object(watch, "find_dialogs", return_value=dialogs), mock.patch.object(
+            watch, "find_crash_reporter_pids", return_value=[]
+        ), mock.patch.object(
+            watch,
+            "get_editor_status",
+            return_value={"status": "ok", "agent_instruction": "clear"},
+        ), mock.patch.object(watch, "click_button") as click:
+            click.return_value = {"ok": True, "clicked": "Import", "method": "uia_invoke"}
+            result = watch.dismiss_unreal_blocker(policy="safe_cancel")
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["blocker_kind"], "import_dialog")
+            click.assert_called_with(dialogs[0], "import")
+
+            click.reset_mock()
+            click.return_value = {"ok": True, "clicked": "Cancel", "method": "uia_invoke"}
+            cancelled = watch.dismiss_unreal_blocker(policy="cancel")
+            self.assertTrue(cancelled["ok"])
+            click.assert_called_with(dialogs[0], "cancel")
+
     def test_dismiss_refuses_delete_without_flag(self) -> None:
         dialogs = [
             {
@@ -290,6 +383,8 @@ class OfflineSemanticsTests(unittest.TestCase):
             watch._classify_blocker_kind("Crash Report", "CrashReportClient"), "crash_reporter"
         )
         self.assertEqual(watch._classify_blocker_kind("Context Menu"), "context_menu")
+        self.assertEqual(watch._classify_blocker_kind("Import Content"), "import_dialog")
+        self.assertEqual(watch._classify_blocker_kind("Interchange Pipeline"), "import_dialog")
 
     def test_get_editor_status_keys(self) -> None:
         with mock.patch.object(watch, "find_unreal_pids", return_value=[]), mock.patch.object(
@@ -313,6 +408,7 @@ class OfflineSemanticsTests(unittest.TestCase):
             watch.STATUS_MODAL_BLOCKED,
             watch.STATUS_CRASH_REPORTER,
             watch.STATUS_RESTORE_PACKAGES,
+            watch.STATUS_IMPORT_DIALOG,
             watch.STATUS_PORTS_WEDGED,
             watch.STATUS_PROXY_UNHEALTHY,
         ):
@@ -320,6 +416,9 @@ class OfflineSemanticsTests(unittest.TestCase):
             self.assertTrue(text)
             if st != watch.STATUS_OK:
                 self.assertNotIn("watch clear", text.lower())
+            if st == watch.STATUS_IMPORT_DIALOG:
+                self.assertIn("dismiss_unreal_blocker", text)
+                self.assertIn("Import", text)
 
 
 if __name__ == "__main__":

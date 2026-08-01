@@ -50,6 +50,7 @@ STATUS_EDITOR_OFFLINE = "editor_offline"
 STATUS_MODAL_BLOCKED = "modal_blocked"
 STATUS_CRASH_REPORTER = "crash_reporter"
 STATUS_RESTORE_PACKAGES = "restore_packages"
+STATUS_IMPORT_DIALOG = "import_dialog"
 STATUS_PORTS_WEDGED = "ports_wedged"
 STATUS_PROXY_UNHEALTHY = "proxy_unhealthy"
 
@@ -58,6 +59,7 @@ BLOCKER_STATUSES = frozenset(
         STATUS_MODAL_BLOCKED,
         STATUS_CRASH_REPORTER,
         STATUS_RESTORE_PACKAGES,
+        STATUS_IMPORT_DIALOG,
         STATUS_PORTS_WEDGED,
     }
 )
@@ -164,6 +166,26 @@ _RESTORE_TITLE_HINTS = (
     "restore selected",
 )
 
+# Interchange / FBX / asset import Slate dialogs (game-thread modal).
+_IMPORT_TITLE_HINTS = (
+    "import content",
+    "import asset",
+    "import assets",
+    "fbx import",
+    "interchange",
+    "reimport",
+    "import options",
+    "mesh import",
+)
+
+_IMPORT_ACCEPT_LABELS = (
+    "import",
+    "import all",
+    "ok",
+    "yes",
+    "continue",
+)
+
 _CRASH_TITLE_HINTS = (
     "crash report",
     "crashreporter",
@@ -197,6 +219,8 @@ def _classify_blocker_kind(title: str, process: str = "") -> str:
         return "crash_reporter"
     if _title_matches(title, _RESTORE_TITLE_HINTS):
         return "restore_packages"
+    if _title_matches(title, _IMPORT_TITLE_HINTS):
+        return "import_dialog"
     title_l = (title or "").lower()
     if "context menu" in title_l:
         return "context_menu"
@@ -619,6 +643,9 @@ def find_dialogs(
         w, h = _window_size(hwnd)
         title = _window_text(hwnd)
         cls = _class_name(hwnd)
+        # Never treat Interchange "Import Content" (etc.) as the main editor frame.
+        if _title_matches(title, _IMPORT_TITLE_HINTS):
+            return True
         if not owner and w >= 800 and h >= 600 and (
             cls == "UnrealWindow" or "unreal editor" in title.lower()
         ):
@@ -650,7 +677,10 @@ def find_dialogs(
         w, h = _window_size(hwnd)
         buttons = _child_buttons(hwnd)
         title_l = title.lower()
-        title_hit = any(h in title_l for h in _TITLE_HINTS) if title_l else False
+        import_title = _title_matches(title, _IMPORT_TITLE_HINTS)
+        title_hit = (
+            any(h in title_l for h in _TITLE_HINTS) if title_l else False
+        ) or import_title
         is_crash_proc = "crashreport" in base.lower().replace(" ", "")
 
         is_std = cls == "#32770"
@@ -662,10 +692,14 @@ def find_dialogs(
             or (100 <= w <= 1800 and 60 <= h <= 1400)
             or (not title and 40 <= w <= 800 and 40 <= h <= 600)
         )
+        # Interchange import dialogs may be large / unowned UnrealWindows.
+        titled_import = import_title and (
+            cls == "UnrealWindow" or is_std or bool(buttons)
+        )
         classic = is_std or (bool(buttons) and bool(title))
         crash_window = is_crash_proc and (is_std or cls == "UnrealWindow" or bool(title) or bool(buttons))
 
-        if not (classic or slate_popup or crash_window):
+        if not (classic or slate_popup or crash_window or titled_import):
             return True
 
         uia_names = _uia_button_names(hwnd_i)
@@ -697,12 +731,16 @@ def find_dialogs(
                 "kind": (
                     "crash_reporter"
                     if is_crash_proc or blocker_kind == "crash_reporter"
-                    else ("slate" if is_owned_slate else ("win32" if is_std else "other"))
+                    else (
+                        "import_dialog"
+                        if blocker_kind == "import_dialog"
+                        else ("slate" if is_owned_slate or titled_import else ("win32" if is_std else "other"))
+                    )
                 ),
                 "blocker_kind": blocker_kind,
                 "buttons": button_rows,
                 "_button_hwnds": {b["text"].lower(): b["hwnd"] for b in buttons},
-                "_slate": bool(is_owned_slate),
+                "_slate": bool(is_owned_slate or titled_import),
             }
         )
         return True
@@ -716,6 +754,9 @@ def find_dialogs(
         if kind == "crash_reporter" or "crash" in t:
             pri = 5
         elif kind == "restore_packages":
+            pri = 4
+        elif kind == "import_dialog" or _title_matches(str(d.get("title") or ""), _IMPORT_TITLE_HINTS):
+            # Prefer Interchange Import over Message Log / generic slate noise.
             pri = 4
         elif "error" in t or "compilation" in t or "compile" in t:
             pri = 3
@@ -743,7 +784,8 @@ def _close_hwnd(hwnd: int) -> dict[str, Any]:
 
 def click_button(dialog: dict[str, Any], choice: str) -> dict[str, Any]:
     mapping = {
-        "accept": ["ok", "yes", "continue", "retry", "save", "apply"],
+        "accept": ["ok", "yes", "continue", "retry", "save", "apply", "import", "import all"],
+        "import": list(_IMPORT_ACCEPT_LABELS),
         "ok": ["ok"],
         "yes": ["yes"],
         "cancel": ["cancel", "close", "no", "don't restore", "dont restore", "don't send", "dont send"],
@@ -900,11 +942,19 @@ def _instruction_for_status(
             "(default policy=dont_restore / Cancel). Never click Delete without "
             "allow_destructive=true."
         )
+    if status == STATUS_IMPORT_DIALOG:
+        return (
+            "STOP Unreal MCP retries. status=import_dialog — Interchange Import Content "
+            f"(or similar) dialog detected ({titles}). Game thread is blocked until Import. "
+            "RECOVER: call dismiss_unreal_blocker (default clicks Import to finish the "
+            "asset import). Pass policy=cancel only to abort the import."
+        )
     if status == STATUS_MODAL_BLOCKED:
         return (
             "STOP Unreal MCP retries. status=modal_blocked — blocking Slate/Win32 dialog "
             f"or context menu ({titles}). RECOVER: call dismiss_unreal_blocker "
-            "(safe_cancel → Escape/Cancel) or ask the user. Never kill/rebind :8001."
+            "(safe_cancel → Escape/Cancel; Import Content uses Import by default) "
+            "or ask the user. Never kill/rebind :8001."
         )
     if status == STATUS_PORTS_WEDGED:
         return (
@@ -924,7 +974,7 @@ def _instruction_for_status(
             "Editor watch clear — Unreal MCP via :8001 may be used. "
             "On address-in-use / WinError 10048: verify /health and reuse; never kill proxy. "
             "Contract: call get_editor_status before Unreal MCP batches; on modal_blocked / "
-            "crash_reporter / restore_packages call dismiss_unreal_blocker."
+            "import_dialog / crash_reporter / restore_packages call dismiss_unreal_blocker."
         )
     return (
         f"status={status}. Follow advice[]; do not spam Unreal MCP. "
@@ -977,17 +1027,29 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         bool(crash_processes) and not bool(processes)
     )
     has_restore = "restore_packages" in blocker_kinds
-    modal_blocking = (modal_present and not editor_responsive) or has_crash_ui or has_restore
+    has_import = "import_dialog" in blocker_kinds
+    modal_blocking = (
+        (modal_present and not editor_responsive)
+        or has_crash_ui
+        or has_restore
+        or has_import
+    )
 
     unreal_running = bool(processes)
     abort_unreal_mcp = False
-    # Priority: crash_reporter > restore_packages > offline > modal > wedged > proxy > ok
+    # Priority: crash > restore > import > offline > modal > wedged > proxy > ok
     if has_crash_ui:
         status = STATUS_CRASH_REPORTER
         likely_blocked = True
         abort_unreal_mcp = True
     elif has_restore:
         status = STATUS_RESTORE_PACKAGES
+        likely_blocked = True
+        abort_unreal_mcp = True
+    elif has_import:
+        # Interchange Import Content blocks the game thread even if a probe
+        # briefly answers — treat like Restore Packages (always abort).
+        status = STATUS_IMPORT_DIALOG
         likely_blocked = True
         abort_unreal_mcp = True
     elif not unreal_running:
@@ -1023,6 +1085,12 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         advice.append(
             f"Restore Packages dialog detected: {titles}. "
             f"Policy={policy} — dismiss_unreal_blocker skips restore by default."
+        )
+    if has_import:
+        advice.append(
+            f"Interchange Import dialog detected: {titles}. "
+            "Call dismiss_unreal_blocker (default clicks Import). "
+            "policy=cancel only to abort the import. Do not spam Unreal MCP."
         )
     if not unreal_running and not has_crash_ui:
         advice.append("UnrealEditor process not found — start the editor.")
@@ -1077,6 +1145,7 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     if mode == "auto_allowlist" and dialogs_raw and status not in (
         STATUS_CRASH_REPORTER,
         STATUS_RESTORE_PACKAGES,
+        STATUS_IMPORT_DIALOG,
     ):
         allow = {str(x).lower() for x in (cfg.get("auto_allowlist") or [])}
         never = {str(x).lower() for x in (cfg.get("never_auto") or [])}
@@ -1084,7 +1153,7 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         title_l = str(dlg.get("title") or "").lower()
         if any(
             n in title_l
-            for n in ("save", "delete", "overwrite", "checkout", "discard", "restore")
+            for n in ("save", "delete", "overwrite", "checkout", "discard", "restore", "import")
         ):
             auto_action = {"skipped": True, "reason": f"never auto title: {dlg.get('title')}"}
         else:
@@ -1151,7 +1220,12 @@ def check_unreal(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "recover_tool": (
             "dismiss_unreal_blocker"
             if status
-            in (STATUS_MODAL_BLOCKED, STATUS_CRASH_REPORTER, STATUS_RESTORE_PACKAGES)
+            in (
+                STATUS_MODAL_BLOCKED,
+                STATUS_CRASH_REPORTER,
+                STATUS_RESTORE_PACKAGES,
+                STATUS_IMPORT_DIALOG,
+            )
             else ("wait_for_editor" if status == STATUS_EDITOR_OFFLINE else None)
         ),
         "auto_action": auto_action,
@@ -1200,7 +1274,7 @@ def wait_for_editor(
 ) -> dict[str, Any]:
     """Poll until editor is ready, a blocker appears, or timeout.
 
-    Returns early on modal/crash/restore when ``return_on_blocker`` is True so
+    Returns early on modal/crash/restore/import when ``return_on_blocker`` is True so
     agents can call ``dismiss_unreal_blocker`` instead of waiting out the clock.
     ``editor_offline`` keeps polling (user may still be launching).
     """
@@ -1309,11 +1383,13 @@ def dismiss_unreal_blocker(
     hwnd: int | None = None,
     cfg: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Safely dismiss known Unreal blockers (dialogs, crash reporter, restore packages).
+    """Safely dismiss known Unreal blockers (dialogs, crash reporter, restore, import).
 
     Policies:
-      - safe_cancel (default): Escape / Cancel / Close / Don't Restore / Don't Send
-      - accept: OK / Yes / Enter (still refuses Delete unless allow_destructive)
+      - safe_cancel (default): Escape / Cancel / Don't Restore / close CRC;
+        for Interchange Import Content, clicks **Import** (complete the import)
+      - accept / import: OK / Yes / Import / Enter
+      - cancel: Escape / Cancel (also aborts Import Content when explicit)
       - restore_packages_skip: force Don't Restore / Cancel for Restore Packages
       - crash_reporter_close: close Crash Report Client (Cancel / WM_CLOSE)
 
@@ -1373,8 +1449,24 @@ def dismiss_unreal_blocker(
         blocker_kind == "crash_reporter" and policy_l == "safe_cancel"
     ):
         choice = "close"
-    elif policy_l in ("accept", "ok", "yes"):
-        choice = "accept"
+    elif blocker_kind == "import_dialog" and policy_l in (
+        "safe_cancel",
+        "import",
+        "accept",
+        "ok",
+        "yes",
+    ):
+        # Automated asset import: complete via Import (not Cancel/Escape).
+        choice = "import"
+    elif blocker_kind == "import_dialog" and policy_l in (
+        "cancel",
+        "reject",
+        "escape",
+        "abort_import",
+    ):
+        choice = "cancel"
+    elif policy_l in ("accept", "ok", "yes", "import"):
+        choice = "import" if policy_l == "import" else "accept"
     else:
         choice = "cancel"
 
@@ -1385,11 +1477,11 @@ def dismiss_unreal_blocker(
             if b.get("source") != "keyboard" and b.get("enabled", True)
         ]
         destructive = [t for t in real if _is_destructive_label(t)]
-        if choice in ("accept", "yes", "ok"):
+        if choice in ("accept", "yes", "ok", "import"):
             safe_accept = [
                 t
                 for t in real
-                if t.lower() in ("ok", "yes", "continue", "close", "retry")
+                if t.lower() in ("ok", "yes", "continue", "close", "retry", "import", "import all")
                 and not _is_destructive_label(t)
             ]
             title_l = str(target.get("title") or "").lower()
@@ -1434,6 +1526,18 @@ def dismiss_unreal_blocker(
                     result = uia
                 else:
                     result = _close_hwnd(int(target["hwnd"]))
+            actions.append(result)
+        elif blocker_kind == "import_dialog":
+            if choice == "cancel":
+                result = click_button(target, "cancel")
+            else:
+                result = click_button(target, "import")
+                if result.get("method") == "keyboard":
+                    uia = _uia_invoke_button(
+                        int(target["hwnd"]), list(_IMPORT_ACCEPT_LABELS)
+                    )
+                    if uia and uia.get("ok"):
+                        result = uia
             actions.append(result)
         else:
             if choice == "accept":

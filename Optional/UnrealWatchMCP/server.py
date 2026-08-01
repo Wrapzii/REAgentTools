@@ -27,11 +27,11 @@ if str(HERE) not in sys.path:
 import watch  # noqa: E402
 
 SERVER_NAME = "unreal-watch"
-SERVER_VERSION = "0.5.0"
+SERVER_VERSION = "0.6.0"
 
 _STATUS_ENUM = (
     "ok|editor_offline|modal_blocked|crash_reporter|restore_packages|"
-    "ports_wedged|proxy_unhealthy"
+    "import_dialog|ports_wedged|proxy_unhealthy"
 )
 
 
@@ -94,7 +94,7 @@ def _run_fastmcp() -> int:
             "Compact editor status JSON (status, unreal_running, abort_unreal_mcp, "
             "modal, crash_reporter_processes, recover_tool, agent_instruction). "
             "Agent contract: call this BEFORE Unreal MCP batches; on modal_blocked / "
-            "crash_reporter / restore_packages call dismiss_unreal_blocker."
+            "import_dialog / crash_reporter / restore_packages call dismiss_unreal_blocker."
         ),
     )
     def get_editor_status() -> dict[str, Any]:
@@ -104,8 +104,8 @@ def _run_fastmcp() -> int:
         name="wait_for_editor",
         description=(
             "Block until Unreal Editor is ready, a blocker appears, or timeout. "
-            "Returns early on modal_blocked / crash_reporter / restore_packages / "
-            "ports_wedged (wait_result=blocker:…) so agents can dismiss. "
+            "Returns early on modal_blocked / import_dialog / crash_reporter / "
+            "restore_packages / ports_wedged (wait_result=blocker:…) so agents can dismiss. "
             "editor_offline keeps polling. Default timeout 120s. Emits MCP progress "
             "notifications when the client supports them."
         ),
@@ -145,11 +145,12 @@ def _run_fastmcp() -> int:
     @mcp.tool(
         name="dismiss_unreal_blocker",
         description=(
-            "Safely dismiss Crash Reporter / Restore Packages / blocking Slate-Win32 "
-            "dialogs. policy=safe_cancel (default: Escape/Cancel/Don't Restore/close CRC), "
-            "accept, restore_packages_skip, or crash_reporter_close. "
-            "Never clicks Delete / destructive buttons unless allow_destructive=true. "
-            "Returns status_after + followup get_editor_status."
+            "Safely dismiss Crash Reporter / Restore Packages / Import Content / "
+            "blocking Slate-Win32 dialogs. policy=safe_cancel (default: Escape/Cancel/"
+            "Don't Restore/close CRC; Import Content clicks Import), "
+            "import, cancel (abort import), accept, restore_packages_skip, "
+            "or crash_reporter_close. Never clicks Delete / destructive buttons unless "
+            "allow_destructive=true. Returns status_after + followup get_editor_status."
         ),
     )
     def dismiss_unreal_blocker(
@@ -168,7 +169,7 @@ def _run_fastmcp() -> int:
         description=(
             "Low-level: click a button on the detected Unreal dialog. "
             "Prefer dismiss_unreal_blocker for safe defaults. "
-            "choice: accept|cancel|yes|no|close|dont_restore or exact button label. "
+            "choice: accept|import|cancel|yes|no|close|dont_restore or exact button label. "
             "Optional hwnd from check_unreal.modal.dialogs[].hwnd."
         ),
     )
@@ -303,8 +304,9 @@ TOOLS = [
     {
         "name": "dismiss_unreal_blocker",
         "description": (
-            "Safe dismiss for crash reporter / restore packages / modals. "
-            "policy=safe_cancel|accept|restore_packages_skip|crash_reporter_close. "
+            "Safe dismiss for crash reporter / restore packages / Import Content / modals. "
+            "policy=safe_cancel|import|cancel|accept|restore_packages_skip|crash_reporter_close. "
+            "Import Content defaults to Import; policy=cancel aborts. "
             "Never Delete without allow_destructive=true."
         ),
         "inputSchema": {
