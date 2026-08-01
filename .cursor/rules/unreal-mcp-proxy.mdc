@@ -17,10 +17,10 @@ Canonical code: `Optional/UnrealMcpProxy/unreal_mcp_proxy.py`.
 
 1. Point Cursor/Codex at **`:8001`**, not raw Unreal `:8000`.
 2. WinError **10048** / “address already in use” → verify `/health`. If `service` is `unreal-mcp-http-proxy`, **reuse**. Never kill, rebind, or clear proxy state as “recovery.”
-3. Mid-session timeout while Unreal looks open → `unreal-watch.check_unreal` **once** → one batched MCP resubmit → only then RC oneshot.
+3. Mid-session timeout / 10061 / empty upstream while Unreal looks open → `unreal-watch.get_editor_status` (or `check_unreal`) **once**. On `import_dialog` / `modal_blocked` / `restore_packages` / `crash_reporter` → `dismiss_unreal_blocker` (Import Content → **Import**) → re-check. If `ok` → one batched MCP resubmit → only then RC oneshot. Do not spam MCP while blocked / `editor_offline`.
 4. Do not treat GET `/mcp` volume, Epic `datarouter` DNS errors, or a single slow `tools/call` as “proxy broken.”
 5. Client tool timeout must be **≥ 180s** (proxy default request timeout).
-6. **“Unreal MCP returned an empty reply” → resubmit the same call once.** The proxy re-establishes the session on the second consecutive empty and retries. Only when a *freshly created* session also returns empty is the editor really blocked → `check_unreal` once → one batched resubmit → then RC.
+6. **“Unreal MCP returned an empty reply” → resubmit the same call once.** The proxy re-establishes the session on the second consecutive empty and retries. Only when a *freshly created* session also returns empty is the editor really blocked → watch rule #3 (`get_editor_status` → dismiss if needed → one batched resubmit → then RC).
 7. Never edit the upstream `Connection` header to `close`. Unreal streams `tools/call` results as SSE on the POST response and aborts the stream on close, which empties every real call while `initialize`/`tools/list` still look fine.
 8. Replacing a running proxy is `--restart` only, and only as an explicit upgrade when idle — never as timeout recovery. `outdated: true` from `/health` still means reuse.
 9. `call_tool` takes the **registry name** from `list_toolsets` (e.g. `re_agent_tools.toolsets.context_tools.REContextTools`). “Toolset not found” means wrong argument, not unreachable REAgentTools — fix the name, do not fall back to Epic tools or RC.
