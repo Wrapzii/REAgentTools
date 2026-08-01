@@ -18,7 +18,7 @@ import os
 import sys
 import traceback
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
@@ -27,7 +27,7 @@ if str(HERE) not in sys.path:
 import watch  # noqa: E402
 
 SERVER_NAME = "unreal-watch"
-SERVER_VERSION = "0.6.0"
+SERVER_VERSION = "0.6.1"
 
 _STATUS_ENUM = (
     "ok|editor_offline|modal_blocked|crash_reporter|restore_packages|"
@@ -70,7 +70,10 @@ def _maybe_start_heartbeat() -> None:
 
 
 def _run_fastmcp() -> int:
-    from mcp.server.fastmcp import Context, FastMCP
+    # Do not put FastMCP Context in tool signatures: with
+    # ``from __future__ import annotations``, FastMCP fails discovery with
+    # InvalidSignature ("Unable to evaluate type annotations … undefined").
+    from mcp.server.fastmcp import FastMCP
 
     mcp = FastMCP(SERVER_NAME)
 
@@ -85,7 +88,7 @@ def _run_fastmcp() -> int:
             "Ensures :8001 proxy if missing — never kills/rebinds."
         ),
     )
-    def check_unreal() -> dict[str, Any]:
+    def check_unreal() -> dict:
         return _public(watch.check_unreal())
 
     @mcp.tool(
@@ -97,7 +100,7 @@ def _run_fastmcp() -> int:
             "import_dialog / crash_reporter / restore_packages call dismiss_unreal_blocker."
         ),
     )
-    def get_editor_status() -> dict[str, Any]:
+    def get_editor_status() -> dict:
         return watch.get_editor_status()
 
     @mcp.tool(
@@ -106,40 +109,19 @@ def _run_fastmcp() -> int:
             "Block until Unreal Editor is ready, a blocker appears, or timeout. "
             "Returns early on modal_blocked / import_dialog / crash_reporter / "
             "restore_packages / ports_wedged (wait_result=blocker:…) so agents can dismiss. "
-            "editor_offline keeps polling. Default timeout 120s. Emits MCP progress "
-            "notifications when the client supports them."
+            "editor_offline keeps polling. Default timeout 120s."
         ),
     )
     def wait_for_editor(
         timeout_s: float = 120.0,
         poll_s: float = 2.0,
         return_on_blocker: bool = True,
-        ctx: Context | None = None,
-    ) -> dict[str, Any]:
-        progress_cb = None
-        if ctx is not None:
-
-            def progress_cb(ticks: int, status: str, _last: dict[str, Any]) -> None:
-                # Best-effort MCP progress notify; Cursor may ignore (still pull-based).
-                try:
-                    import asyncio
-
-                    loop = asyncio.get_running_loop()
-                    loop.create_task(
-                        ctx.report_progress(
-                            progress=float(ticks),
-                            total=None,
-                            message=f"unreal-watch status={status}",
-                        )
-                    )
-                except Exception:
-                    pass
-
+    ) -> dict:
         return watch.wait_for_editor(
             timeout_s=timeout_s,
             poll_s=poll_s,
             return_on_blocker=return_on_blocker,
-            progress_cb=progress_cb,
+            progress_cb=None,
         )
 
     @mcp.tool(
@@ -157,7 +139,7 @@ def _run_fastmcp() -> int:
         policy: str = "safe_cancel",
         allow_destructive: bool = False,
         hwnd: Optional[int] = None,
-    ) -> dict[str, Any]:
+    ) -> dict:
         return watch.dismiss_unreal_blocker(
             policy=policy,
             allow_destructive=allow_destructive,
@@ -173,14 +155,14 @@ def _run_fastmcp() -> int:
             "Optional hwnd from check_unreal.modal.dialogs[].hwnd."
         ),
     )
-    def dismiss_dialog(choice: str = "accept", hwnd: Optional[int] = None) -> dict[str, Any]:
+    def dismiss_dialog(choice: str = "accept", hwnd: Optional[int] = None) -> dict:
         return watch.dismiss_dialog(choice=choice, hwnd=hwnd)
 
     @mcp.tool(
         name="get_watch_config",
         description="Return UnrealWatch mode (report|auto_allowlist), restore policy, allowlists.",
     )
-    def get_watch_config() -> dict[str, Any]:
+    def get_watch_config() -> dict:
         return watch.load_config()
 
     @mcp.tool(
@@ -193,9 +175,9 @@ def _run_fastmcp() -> int:
     )
     def set_watch_config(
         mode: Optional[str] = None,
-        auto_allowlist: Optional[list[str]] = None,
+        auto_allowlist: Optional[List[str]] = None,
         restore_packages_policy: Optional[str] = None,
-    ) -> dict[str, Any]:
+    ) -> dict:
         cfg = watch.load_config()
         if mode is not None:
             mode_l = str(mode).lower()
