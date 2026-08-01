@@ -7,6 +7,8 @@ alwaysApply: true
 
 - Prefer `RE*WorkflowTools` (`get_editor_context` / `execute_editor_batch`) over Epic Scene/Actor/Object one-shots.
 - Trivia (“what level?”) → push back before any Unreal tool call.
+- Local Cursor MCP → anti-thrash proxy `:8001` (`Optional/UnrealMcpProxy`). Never kill/rebind on WinError 10048; use `GET /health`.
+- “Empty reply” from Unreal MCP → resubmit the same call **once** (proxy re-establishes the session), don't jump to RC. `call_tool` takes the `list_toolsets` registry name (`re_agent_tools.toolsets.…`).
 - If `mcp-unreal` is error/loading/empty (common in Cursor Remote Control): load skill **`reagent-rc-oneshot`** and call `rc_bridge.oneshot_python({...})` in ONE RC exec. Do not claim REAgentTools unreachable. Do not invent `_rc_exec` Epic scripts.
 - Niagara authoring: Epic tools in **one** `execute_tool_script`, compile once — never N MCP hops; no RE module-graph DSL (`Docs/NIAGARA_BATCHING.md`).
-- Canonical docs: `Docs/AGENT_DEFAULTS.md`, `Docs/REMOTE_CONTROL_MCP.md`, `Docs/NIAGARA_BATCHING.md`, `AGENTS.md`.
+- Canonical docs: `Docs/AGENT_DEFAULTS.md`, `Docs/REMOTE_CONTROL_MCP.md`, `Docs/NIAGARA_BATCHING.md`, `Optional/UnrealMcpProxy/README.md`, `AGENTS.md`.

@@ -7,9 +7,32 @@ Agents in **Cursor Remote Control / Agents Window / mobile cloud** often report:
 > `mcp-unreal` → `serverStatus: error` — “failed during live tool discovery”  
 > then fall back to Unreal Remote Control Python (`_rc_exec.py` → `127.0.0.1:30010`) and skip REAgentTools.
 
-**Local Editor Agent/Chat** usually sees `mcp-unreal` fine. Remote sessions assemble MCP tools differently.
+**Local Editor Agent/Chat** usually sees `mcp-unreal` fine when pointed at the anti-thrash proxy. Remote sessions assemble MCP tools differently.
 
-This is a **Cursor session / MCP routing limitation**, not a missing plugin. REAgentTools still register in-editor; MCP is only one transport.
+This is often a **Cursor session / MCP routing limitation**, not a missing plugin. REAgentTools still register in-editor; MCP is only one transport.
+
+### Local anti-thrash proxy (`Optional/UnrealMcpProxy`)
+
+| Port | Role |
+|------|------|
+| `:8000` | Unreal native `ModelContextProtocol` |
+| `:8001` | Anti-thrash HTTP sidecar — **Cursor should use this** |
+
+```json
+{ "mcpServers": { "unreal-mcp": { "type": "http", "url": "http://127.0.0.1:8001/mcp" } } }
+```
+
+- `GET /health` → service identity (`unreal-mcp-http-proxy`) + diagnostics
+- `GET /mcp` → **405 Method Not Allowed** (no SSE stream). Protocol-correct; not a crash.
+- Sticky upstream session on disk; timeouts do **not** open new Unreal sessions
+- WinError **10048** / address in use → verify `/health` and **reuse**. Never kill/rebind `:8001`
+- Mid-session “MCP dropped” while Unreal is fine → `unreal-watch.check_unreal` once → one batched MCP resubmit → only then RC oneshot
+- Client tool timeout should be **≥ 180s** (proxy request timeout)
+- “Unreal MCP returned an empty reply” → **resubmit once**; the proxy re-establishes the session on the second empty. Only a fresh session also returning empty means the editor is blocked
+- Upstream connections to Unreal must be **keep-alive**: `tools/call` results arrive as SSE on the POST response, and `Connection: close` aborts the stream (empty results for real work while `initialize`/`tools/list` still succeed)
+- `call_tool` wants the registry name from `list_toolsets`, e.g. `re_agent_tools.toolsets.context_tools.REContextTools`
+
+See [`Optional/UnrealMcpProxy/README.md`](../Optional/UnrealMcpProxy/README.md).
 
 ### Cursor facts (product)
 

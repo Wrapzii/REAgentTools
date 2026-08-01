@@ -123,8 +123,10 @@ Keep this light — prefer one rule, not a new skill:
 | `AGENTS.md` | New-chat bootstrap (transport table + oneshot copy/paste) |
 | `.cursor/rules/re-context-budget.mdc` | Always-on one-liner pointing at RE composites + RC skill |
 | `.cursor/rules/re-agent-tools.mdc` | Always-on: trivia pushback + RE-first + RC oneshot |
+| `.cursor/rules/unreal-mcp-proxy.mdc` | Always-on: `:8001` proxy, never kill/rebind, `/health` vs `/mcp` |
 | `.cursor/skills/reagent-rc-oneshot/SKILL.md` | One-shot RC transport when MCP discovery fails |
-| `Content/RE/UNREAL_MCP_TOOL_MAP.md` | Signatures; RE section before Epic chains |
+| `Optional/UnrealMcpProxy/` | Canonical anti-thrash HTTP/stdio sidecar |
+| `Optional/UnrealWatchMCP/` | Host-side freeze/dialog detector (+ ensure `:8001`) |
 | `Docs/REMOTE_CONTROL_MCP.md` | Why Remote Control loses MCP + RC bridge protocol |
 | This file (`Docs/AGENT_DEFAULTS.md`) | Human + agent sample (canonical in this repo) |
 | `Docs/NIAGARA_BATCHING.md` | Epic Niagara batch + compile-once; no RE module-graph DSL |
@@ -137,6 +139,10 @@ Do **not** add a dedicated skill just for “use REAgentTools.”
 
 - [ ] Trivia? Push back — no tool yet  
 - [ ] Real work? `get_editor_context` or `execute_editor_batch` first  
+- [ ] Local Cursor → `:8001` proxy; mid-session timeout → `check_unreal` once, never kill `:8001`  
+- [ ] WinError 10048? `GET /health` and reuse — do not rebind  
+- [ ] “Empty reply” from MCP? Resubmit the same call **once** before blaming the transport  
+- [ ] `call_tool` uses the `list_toolsets` registry name (`re_agent_tools.toolsets.…`), not the bare class  
 - [ ] MCP discovery failed in Remote Control? `oneshot_python` / skill `reagent-rc-oneshot` — not Epic  
 - [ ] Never Epic `get_current_level` alone  
 - [ ] Niagara *authoring*? Epic tools in **one** `execute_tool_script`; compile once at end — no RE DSL  
