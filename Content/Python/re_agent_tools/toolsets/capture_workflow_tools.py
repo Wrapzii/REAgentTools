@@ -101,12 +101,16 @@ def _downscale(path: Path, max_dimension: int, jpeg_quality: int) -> dict:
             "print(out); print(im.size[0]); print(im.size[1])"
         )
         candidates = [
-            sys.executable,
             r"C:\Program Files\Python39\python.exe",
             r"C:\Program Files\Python311\python.exe",
             r"C:\Program Files\Python312\python.exe",
             "python",
         ]
+        # Inside Unreal, sys.executable is UnrealEditor.exe — never use it as
+        # a Python interpreter or every downscale spawns a second editor.
+        exe = Path(getattr(sys, "executable", "") or "")
+        if exe.is_file() and "unrealeditor" not in exe.name.lower():
+            candidates.insert(0, str(exe))
         for py in candidates:
             try:
                 proc = subprocess.run(
@@ -470,6 +474,141 @@ def _apply_material_params(mat_or_dmi, params: dict) -> list[str]:
     return applied
 
 
+def _gif_dir() -> Path:
+    d = _project_root() / "Saved" / "GIFs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _resolve_gif_frame(path_str: str) -> Path:
+    raw = str(path_str or "").strip().strip('"')
+    if not raw:
+        raise ValueError("empty frame path")
+    p = Path(raw)
+    if not p.is_absolute():
+        p = (_project_root() / p).resolve()
+    else:
+        p = p.resolve()
+    if not p.is_file():
+        raise FileNotFoundError(f"frame not found: {raw}")
+    try:
+        p.relative_to(_project_root().resolve())
+    except ValueError as exc:
+        raise ValueError(f"frame must be under project root: {raw}") from exc
+    if p.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff", ".tif"}:
+        raise ValueError(f"unsupported frame type: {p.suffix}")
+    return p
+
+
+def _collect_gif_frames_from_dir(directory: str, pattern: str = "*") -> list[Path]:
+    import re
+
+    base = Path(directory.strip().strip('"'))
+    if not base.is_absolute():
+        base = (_project_root() / base).resolve()
+    if not base.is_dir():
+        raise FileNotFoundError(f"directory not found: {directory}")
+    try:
+        base.relative_to(_project_root().resolve())
+    except ValueError as exc:
+        raise ValueError(f"directory must be under project root: {directory}") from exc
+    rx = re.compile("^" + re.escape(pattern).replace("\\*", ".*").replace("\\?", ".") + "$", re.IGNORECASE)
+    ext = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff", ".tif"}
+    matches = [child.resolve() for child in sorted(base.iterdir()) if child.is_file() and child.suffix.lower() in ext and rx.match(child.name)]
+    if not matches:
+        raise FileNotFoundError(f"no frames matched {pattern!r} in {base}")
+    return matches
+
+
+def _create_gif_from_paths(frame_paths: list[Path], output_path: Path, duration_ms: int, loop: int) -> Path:
+    from PIL import Image  # type: ignore
+
+    if not frame_paths:
+        raise ValueError("at least one frame path is required")
+    if duration_ms < 20:
+        raise ValueError("duration_ms must be at least 20")
+
+    base_size = Image.open(frame_paths[0]).size
+    frames: list[Image.Image] = []
+    rgb_frames: list[Image.Image] = []
+    try:
+        for path in frame_paths:
+            with Image.open(path) as img:
+                frame = img.convert("RGBA")
+            if frame.size != base_size:
+                frame = frame.resize(base_size, Image.Resampling.LANCZOS)
+            frames.append(frame)
+            bg = Image.new("RGBA", frame.size, (0, 0, 0, 255))
+            bg.alpha_composite(frame)
+            rgb_frames.append(bg.convert("RGB"))
+
+        out = output_path.with_suffix(".gif")
+        out.parent.mkdir(parents=True, exist_ok=True)
+        first, rest = rgb_frames[0], rgb_frames[1:]
+        first.save(
+            out,
+            format="GIF",
+            save_all=True,
+            append_images=rest,
+            duration=int(duration_ms),
+            loop=int(loop),
+            optimize=True,
+        )
+        return out.resolve()
+    finally:
+        for frame in frames:
+            frame.close()
+        for frame in rgb_frames:
+            frame.close()
+
+
+def _capture_viewport_frame_sequence(
+    frame_count: int,
+    capture_interval_ms: int,
+    width: int,
+    height: int,
+    max_dimension: int,
+) -> tuple[list[Path], Path, list[str]]:
+    import shutil
+
+    count = max(2, min(int(frame_count), 48))
+    interval_ms = max(0, int(capture_interval_ms))
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    frames_dir = _shot_dir() / f"_gif_work_{stamp}"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    warnings: list[str] = []
+    frame_paths: list[Path] = []
+    cap_w = max(int(width), 640)
+    cap_h = max(int(height), 360)
+    try:
+        for i in range(count):
+            dest = frames_dir / f"frame_{i:03d}.png"
+            info, cap_warns = _capture_to_disk(dest, cap_w, cap_h, int(max_dimension), 0)
+            warnings.extend(cap_warns)
+            actual = dest
+            rel = str(info.get("path") or "").strip()
+            if rel:
+                candidate = (_project_root() / rel).resolve() if not Path(rel).is_absolute() else Path(rel).resolve()
+                if candidate.is_file():
+                    actual = candidate
+            if not actual.is_file():
+                raise RuntimeError(f"viewport frame {i + 1}/{count} was not written")
+            frame_paths.append(actual.resolve())
+            if i < count - 1 and interval_ms > 0:
+                time.sleep(interval_ms / 1000.0)
+        return frame_paths, frames_dir, warnings
+    except Exception:
+        shutil.rmtree(frames_dir, ignore_errors=True)
+        raise
+
+
+def _cleanup_gif_workdir(frames_dir: Path) -> None:
+    import shutil
+
+    if frames_dir.name.startswith("_gif_work_"):
+        shutil.rmtree(frames_dir, ignore_errors=True)
+
+
 @unreal.uclass()
 class RECaptureWorkflowTools(unreal.ToolsetDefinition):
     """RE composite capture: disk path + optional downscale/JPEG — never return base64."""
@@ -820,6 +959,127 @@ class RECaptureWorkflowTools(unreal.ToolsetDefinition):
 
     @toolset_registry.tool_call
     @staticmethod
+    def capture_viewport_gif(
+        frame_count: int = 8,
+        capture_interval_ms: int = 250,
+        filename: str = "",
+        width: int = 1280,
+        height: int = 720,
+        max_dimension: int = 960,
+        duration_ms: int = 0,
+        loop: int = 0,
+    ) -> str:
+        """Capture the active editor viewport over time and write Saved/GIFs/*.gif.
+
+        Uses the same viewport capture path as capture_viewport_to_disk (SceneCapture / HighResShot).
+        Move the camera or play PIE between frames for motion. Returns a project-relative GIF path.
+        duration_ms: per-frame display time in the GIF (0 = use capture_interval_ms).
+        """
+        timer = WorkflowTimer()
+        request_id = make_request_id()
+        work_dir: Path | None = None
+        try:
+            frame_paths, work_dir, cap_warns = _capture_viewport_frame_sequence(
+                int(frame_count),
+                int(capture_interval_ms),
+                int(width),
+                int(height),
+                int(max_dimension),
+            )
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            name = filename.strip() if filename else f"re_viewport_{stamp}.gif"
+            if not name.lower().endswith(".gif"):
+                name += ".gif"
+            dest = _gif_dir() / name
+            frame_ms = int(duration_ms) if int(duration_ms) > 0 else max(20, int(capture_interval_ms))
+            out = _create_gif_from_paths(frame_paths, dest, frame_ms, int(loop))
+            info = {
+                "path": _norm_path(out),
+                "bytes": out.stat().st_size if out.exists() else 0,
+                "frames": len(frame_paths),
+                "duration_ms": frame_ms,
+                "capture_interval_ms": int(capture_interval_ms),
+            }
+            result = workflow_result(
+                "capture_viewport_gif",
+                True,
+                f"Wrote {info['path']}",
+                request_id=request_id,
+                created=[info["path"]],
+                warnings=cap_warns,
+                extra=info,
+                duration_ms=timer.elapsed_ms,
+            )
+            log_tool_call("capture_viewport_gif", success=True, request_id=request_id, duration_ms=timer.elapsed_ms)
+            return result
+        except Exception as exc:  # noqa: BLE001
+            return error_result(
+                "capture_viewport_gif", str(exc), request_id=request_id, duration_ms=timer.elapsed_ms
+            )
+        finally:
+            if work_dir is not None:
+                _cleanup_gif_workdir(work_dir)
+
+    @toolset_registry.tool_call
+    @staticmethod
+    def make_gif_from_frames(
+        frame_paths_json: str = "[]",
+        from_dir: str = "",
+        pattern: str = "*",
+        filename: str = "",
+        duration_ms: int = 200,
+        loop: int = 0,
+    ) -> str:
+        """Build an animated GIF under Saved/GIFs from ordered frame paths or a directory scan.
+
+        Returns a project-relative path (Saved/GIFs/...) for CursorDesk phone preview.
+        frame_paths_json: JSON array of image paths, e.g. ["Saved/FXShots/view/a.jpg", ...]
+        from_dir: optional directory to scan when frame_paths_json is empty
+        """
+        timer = WorkflowTimer()
+        request_id = make_request_id()
+        try:
+            paths: list[Path] = []
+            parsed = parse_json(frame_paths_json or "[]", field_name="frame_paths_json")
+            if isinstance(parsed, list):
+                for item in parsed:
+                    if item:
+                        paths.append(_resolve_gif_frame(str(item)))
+            if not paths and from_dir.strip():
+                paths = _collect_gif_frames_from_dir(from_dir, pattern)
+            if not paths:
+                raise ValueError("provide frame_paths_json and/or from_dir")
+
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            name = filename.strip() if filename else f"re_clip_{stamp}.gif"
+            if not name.lower().endswith(".gif"):
+                name += ".gif"
+            dest = _gif_dir() / name
+            out = _create_gif_from_paths(paths, dest, int(duration_ms), int(loop))
+            info = {
+                "path": _norm_path(out),
+                "bytes": out.stat().st_size if out.exists() else 0,
+                "frames": len(paths),
+                "duration_ms": int(duration_ms),
+            }
+            result = workflow_result(
+                "make_gif_from_frames",
+                True,
+                f"Wrote {info['path']}",
+                request_id=request_id,
+                created=[info["path"]],
+                extra=info,
+                duration_ms=timer.elapsed_ms,
+            )
+            log_tool_call("make_gif_from_frames", success=True, request_id=request_id, duration_ms=timer.elapsed_ms)
+            return result
+        except Exception as exc:  # noqa: BLE001
+            return error_result(
+                "make_gif_from_frames", str(exc), request_id=request_id, duration_ms=timer.elapsed_ms
+            )
+
+    @toolset_registry.tool_call
+    @staticmethod
     def visual_loop_tool_notes() -> str:
         """What to use for agent visual QA: Epic tools that already work vs RECapture composites."""
         timer = WorkflowTimer()
@@ -850,8 +1110,10 @@ class RECaptureWorkflowTools(unreal.ToolsetDefinition):
                 },
                 "build_with_RECapture": [
                     "capture_viewport_to_disk",
+                    "capture_viewport_gif",
                     "render_material_preview_to_disk",
                     "pie_cast_and_capture",
+                    "make_gif_from_frames",
                 ],
                 "epic_capture_pain": {
                     "tool": "EditorToolset.EditorAppToolset.CaptureViewport",

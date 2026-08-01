@@ -1,6 +1,7 @@
 # Agent defaults — REAgentTools first (sample)
 
 **Audience:** Cursor / MCP agents working in an Unreal project that has this plugin.  
+**New chat:** also open [`AGENTS.md`](../AGENTS.md) and skill `reagent-rc-oneshot` if `mcp-unreal` is down.  
 **Goal:** Cut token burn. Every tool round-trip re-reads ~the full chat prefix (~150–200k counted tokens, mostly cache). Trivial “just checking” calls are not free.
 
 ---
@@ -64,6 +65,41 @@ Returns compact `context`: `level`, `selected_actors`, `selected_assets`, `pie_a
 
 Allowlisted batch actions include: `get_editor_context`, `find_actors`, `resolve_actor`, `resolve_asset`, `spawn_actor`, `set_actor_transform`, `set_actor_properties`, `compile_blueprint`, `set_asset_properties`, `save_asset`, `save_level`.
 
+### 2b. Cursor Remote Control — MCP down ≠ REAgentTools down
+
+If `mcp-unreal` is `serverStatus: error` / no tools (common in Remote Control), **do not** say composites are unreachable and **do not** fall back to Epic or ad-hoc `_rc_exec.py` scripts.
+
+Use **one** RC/Python exec (skill `reagent-rc-oneshot`):
+
+```python
+from re_agent_tools.rc_bridge import oneshot_python
+exec(oneshot_python({
+  "action": "call",
+  "toolset": "REContextTools",
+  "tool": "get_editor_context",
+  "arguments": {"include_level": true, "include_selection": true}
+}))
+```
+
+Parse `REAGENT_RC_RESULT_BEGIN`…`END` from the RC log/stdout. That is ~1 Cursor round-trip (same order as one MCP call). Avoid the 3-hop file protocol unless capture is broken.
+
+Full write-up: [`REMOTE_CONTROL_MCP.md`](./REMOTE_CONTROL_MCP.md).
+
+### 2c. Niagara system authoring — Epic tools, batched (no RE DSL)
+
+**Do not build a Niagara module-graph DSL in REAgentTools.** Epic already has `NiagaraToolsets.*`.
+
+| Job | Tooling |
+|-----|---------|
+| Place / assign / User params / compact inspect | `RENiagaraWorkflowTools` (one composite) |
+| Create system, emitters, renderers, stack edits | Epic Niagara toolsets via **one** `ProgrammaticToolset.execute_tool_script` |
+
+**Wrong:** N separate MCP calls — create → find → add emitter → find → set data → compile → … (console spam = context cost).
+
+**Right:** one script that does all planned mutations, **compile once at the end**, save once, return compact summary. Then RE place/params if needed.
+
+Canonical: [`NIAGARA_BATCHING.md`](./NIAGARA_BATCHING.md).
+
 ---
 
 ## 3. On failure — stay in RE (no Epic “manual mode”)
@@ -84,10 +120,16 @@ Keep this light — prefer one rule, not a new skill:
 
 | Artifact | Role |
 |----------|------|
-| `.cursor/rules/re-agent-tools.mdc` | Attach-on-need: trivia pushback + RE-first |
-| `.cursor/rules/re-context-budget.mdc` | Always-on one-liner pointing at RE composites |
-| `Content/RE/UNREAL_MCP_TOOL_MAP.md` | Signatures; RE section before Epic chains |
+| `AGENTS.md` | New-chat bootstrap (transport table + oneshot copy/paste) |
+| `.cursor/rules/re-context-budget.mdc` | Always-on one-liner pointing at RE composites + RC skill |
+| `.cursor/rules/re-agent-tools.mdc` | Always-on: trivia pushback + RE-first + RC oneshot |
+| `.cursor/rules/unreal-mcp-proxy.mdc` | Always-on: `:8001` proxy, never kill/rebind, `/health` vs `/mcp` |
+| `.cursor/skills/reagent-rc-oneshot/SKILL.md` | One-shot RC transport when MCP discovery fails |
+| `Optional/UnrealMcpProxy/` | Canonical anti-thrash HTTP/stdio sidecar |
+| `Optional/UnrealWatchMCP/` | Host-side freeze/dialog detector (+ ensure `:8001`) |
+| `Docs/REMOTE_CONTROL_MCP.md` | Why Remote Control loses MCP + RC bridge protocol |
 | This file (`Docs/AGENT_DEFAULTS.md`) | Human + agent sample (canonical in this repo) |
+| `Docs/NIAGARA_BATCHING.md` | Epic Niagara batch + compile-once; no RE module-graph DSL |
 
 Do **not** add a dedicated skill just for “use REAgentTools.”
 
@@ -97,6 +139,13 @@ Do **not** add a dedicated skill just for “use REAgentTools.”
 
 - [ ] Trivia? Push back — no tool yet  
 - [ ] Real work? `get_editor_context` or `execute_editor_batch` first  
+- [ ] Local Cursor → `:8001` proxy; mid-session timeout → `check_unreal` once, never kill `:8001`  
+- [ ] WinError 10048? `GET /health` and reuse — do not rebind  
+- [ ] “Empty reply” from MCP? Resubmit the same call **once** before blaming the transport  
+- [ ] `call_tool` uses the `list_toolsets` registry name (`re_agent_tools.toolsets.…`), not the bare class  
+- [ ] MCP discovery failed in Remote Control? `oneshot_python` / skill `reagent-rc-oneshot` — not Epic  
 - [ ] Never Epic `get_current_level` alone  
+- [ ] Niagara *authoring*? Epic tools in **one** `execute_tool_script`; compile once at end — no RE DSL  
+- [ ] Niagara *placement/params*? `RENiagaraWorkflowTools`  
 - [ ] Failure? One RE retry from `recovery`, then stop  
 - [ ] Returns stay compact (paths / counts / warnings / errors)

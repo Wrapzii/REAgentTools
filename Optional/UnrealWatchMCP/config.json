@@ -1,0 +1,24 @@
+{
+  "mode": "report",
+  "auto_allowlist": ["OK", "Close"],
+  "never_auto": [
+    "Don't Save",
+    "Dont Save",
+    "Delete",
+    "Overwrite",
+    "Checkout",
+    "Discard",
+    "Abort",
+    "No"
+  ],
+  "unreal_process_names": ["UnrealEditor", "UnrealEditor-Win64-DebugGame", "UnrealEditor-Win64-Debug"],
+  "crash_reporter_process_names": ["CrashReportClient", "CrashReportClientEditor"],
+  "restore_packages_policy": "dont_restore",
+  "mcp_probe_host": "127.0.0.1",
+  "mcp_probe_port": 8000,
+  "proxy_probe_host": "127.0.0.1",
+  "proxy_probe_port": 8001,
+  "rc_probe_host": "127.0.0.1",
+  "rc_probe_port": 30010,
+  "probe_timeout_s": 2.0
+}

@@ -34,7 +34,7 @@ class REContextTools(unreal.ToolsetDefinition):
         request_id = make_request_id()
         caps = {
             "plugin": "REAgentTools",
-            "version": "1.2.1",
+            "version": "1.2.2",
             "toolsets": [
                 "REContextTools",
                 "REActorWorkflowTools",
@@ -58,9 +58,20 @@ class REContextTools(unreal.ToolsetDefinition):
                 "batch": limits.BATCH_LIMIT,
             },
             "forbid_epic_manual_fallback": True,
+            "rc_bridge": {
+                "entry": "Content/Python/_rc_reagent_exec.py",
+                "oneshot": "re_agent_tools.rc_bridge.oneshot_python",
+                "skill": "reagent-rc-oneshot",
+                "markers": ["REAGENT_RC_RESULT_BEGIN", "REAGENT_RC_RESULT_END"],
+                "request": "Saved/REAgentTools/rc_request.json",
+                "response": "Saved/REAgentTools/rc_response.json",
+                "when": "mcp-unreal serverStatus error/loading in Cursor Remote Control",
+                "prefer": "oneshot_python in ONE RC exec (~1 Cursor turn); file protocol is 3-hop fallback",
+            },
             "on_failure": (
                 "Retry ONCE via REAgentTools only "
-                "(execute_editor_batch / same composite). Never Epic one-by-one."
+                "(execute_editor_batch / same composite). Never Epic one-by-one. "
+                "If MCP discovery failed, use _rc_reagent_exec.py — composites are still reachable."
             ),
         }
         result = workflow_result(

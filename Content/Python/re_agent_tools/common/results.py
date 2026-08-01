@@ -66,7 +66,6 @@ def workflow_result(
     }
     if extra:
         payload.update(extra)
-    # Every REAgentTools result carries anti-fallback policy (burn control).
     payload = attach_agent_policy(payload, operation=operation, success=success)
     payload, soft_warnings = enforce_response_soft_limit(payload)
     if soft_warnings:

@@ -2,7 +2,7 @@
 
 Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step editor operations (spawn + configure + verify, batch transforms, asset bulk edit) into single tool calls that return **compact JSON strings** — reducing MCP round-trips vs chaining Epic `SceneTools` / `ObjectTools` / `ActorTools`.
 
-**Agents:** read [`Docs/AGENT_DEFAULTS.md`](Docs/AGENT_DEFAULTS.md) — push back on trivia tool burns; always prefer REAgentTools (`get_editor_context` / `execute_editor_batch`) over Epic one-shots.
+**Agents (new chat):** start at [`AGENTS.md`](AGENTS.md) → [`Docs/AGENT_DEFAULTS.md`](Docs/AGENT_DEFAULTS.md). Prefer REAgentTools over Epic one-shots. If Cursor Remote Control fails `mcp-unreal` discovery, use skill **`reagent-rc-oneshot`** ([docs](Docs/REMOTE_CONTROL_MCP.md)) — one RC exec via `oneshot_python`, not three file hops.
 
 ## Requirements
 
@@ -17,14 +17,14 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 3. Console: `ModelContextProtocol.RefreshTools`
 4. Verify in MCP Inspector or Cursor `unreal-mcp` — toolsets under `re_agent_tools.toolsets.*`
 
-## Toolsets (v1.2.1 — 15)
+## Toolsets (v1.2.2 — 15)
 
 | Toolset | Purpose |
 |---------|---------|
 | `REContextTools` | Capabilities, editor context, resolve/inspect targets |
 | `REActorWorkflowTools` | Spawn/place/rotate/batch transform/delete/organize |
 | `REDressWorkflowTools` | Cave/hub mesh place, ring scatter, snap-to-floor |
-| `RENiagaraWorkflowTools` | Place/assign Niagara systems + user params |
+| `RENiagaraWorkflowTools` | Place/assign Niagara systems + user params (not module-graph DSL) |
 | `RECharacterWorkflowTools` | Character mesh, combat montages, sockets |
 | `RELightingWorkflowTools` | Environment light inventory + mood presets |
 | `RECaptureWorkflowTools` | Path-only screenshots, FX mat preview, PIE cast+capture |
@@ -39,6 +39,11 @@ Composite MCP workflow toolsets for the **RE** Unreal project. Wraps multi-step 
 
 ## Docs
 
+- [AGENTS.md](AGENTS.md) — new-chat bootstrap for Cursor agents
+- [REMOTE_CONTROL_MCP.md](Docs/REMOTE_CONTROL_MCP.md) — Cursor Remote Control MCP failures + RC oneshot bridge
+- [NIAGARA_BATCHING.md](Docs/NIAGARA_BATCHING.md) — Epic Niagara in one batch; compile once; no RE DSL
+- [Optional/UnrealMcpProxy](Optional/UnrealMcpProxy/README.md) — anti-thrash HTTP/stdio sidecar (`:8001` → Unreal `:8000`)
+- [Optional/UnrealWatchMCP](Optional/UnrealWatchMCP/README.md) — host-side dialog/lockup MCP (`check_unreal` / `dismiss_dialog`)
 - [VISUAL_LOOP.md](Docs/VISUAL_LOOP.md) — Epic Logs/LiveCoding/Slate vs RECapture
 - [EXPAND_PLAN.md](Docs/EXPAND_PLAN.md) — research + wave roadmap
 - [CAPABILITY_MATRIX.md](Docs/CAPABILITY_MATRIX.md) — supported vs missing
@@ -63,4 +68,4 @@ Tool calls append to `Saved/REAgentTools/tool_calls.jsonl`.
 
 ## Agent preference
 
-Prefer **RE*WorkflowTools** composites before chaining low-level Epic tools. See `Content/RE/UNREAL_MCP_TOOL_MAP.md` and `.cursor/rules/re-agent-tools.mdc`.
+Prefer **RE*WorkflowTools** composites before chaining low-level Epic tools. See `Content/RE/UNREAL_MCP_TOOL_MAP.md` and `.cursor/rules/re-agent-tools.mdc`. When MCP is down in Remote Control, use skill `reagent-rc-oneshot` (`rc_bridge.oneshot_python`) — one RC exec, not three file hops.

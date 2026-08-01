@@ -75,7 +75,11 @@ def _set_user_params(comp, params: dict):
 
 @unreal.uclass()
 class RENiagaraWorkflowTools(unreal.ToolsetDefinition):
-    """RE composite Niagara: place system, assign, set user params, compact inspect."""
+    """RE composite Niagara: place system, assign, set user params, compact inspect.
+
+    System/emitter/renderer authoring is NOT here — use Epic NiagaraToolsets via one
+    ProgrammaticToolset.execute_tool_script (compile once at end). See Docs/NIAGARA_BATCHING.md.
+    """
 
     @toolset_registry.tool_call
     @staticmethod

@@ -1,9 +1,9 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.2.1",
+	"VersionName": "1.2.2",
 	"FriendlyName": "RE Agent Tools",
-	"Description": "Composite MCP workflow toolsets for the RE project — multi-step editor operations with compact JSON results.",
+	"Description": "Composite MCP workflow toolsets for the RE project — multi-step editor operations with compact JSON results. Includes Unreal Remote Control bridge when Cursor MCP discovery fails.",
 	"Category": "Scripting",
 	"CreatedBy": "RE Project",
 	"CanContainContent": true,

@@ -1,12 +1,15 @@
 # REAgentTools — Usage Guide
 
-**Start here for agents:** [`AGENT_DEFAULTS.md`](./AGENT_DEFAULTS.md) — trivia pushback, RE-first, no Epic manual fallback.
+**Start here for agents:** [`../AGENTS.md`](../AGENTS.md) then [`AGENT_DEFAULTS.md`](./AGENT_DEFAULTS.md) — trivia pushback, RE-first, no Epic manual fallback. Remote Control MCP down? skill `reagent-rc-oneshot`. Niagara authoring? [`NIAGARA_BATCHING.md`](./NIAGARA_BATCHING.md) (Epic tools, one batch, compile once — no RE DSL).
 
 ## Refresh after install
 
 1. Enable plugin in editor.
 2. Console: `ModelContextProtocol.RefreshTools` (or `REProjectWorkflowTools.reload_workflow_modules`)
 3. Confirm toolsets appear (MCP Inspector or Cursor).
+
+If Cursor **Remote Control** shows `mcp-unreal` discovery error, keep using RE composites via
+[`REMOTE_CONTROL_MCP.md`](./REMOTE_CONTROL_MCP.md) (`_rc_reagent_exec.py`) — do not fall back to Epic tools.
 
 ## Example prompts (agent → tool)
 
@@ -48,6 +51,14 @@
 > "REAnimWorkflowTools.author_clip_from_pose_timeline: folder `/Game/RE/Combat/Anims/Sword`, clip_stem `Sword_Light_01`, poses_json with guard_r → coil_r → slash_contact → follow_through_low, notifies_json trail/hit frames."
 
 > "REAnimWorkflowTools.list_pose_presets then author_controlrig_pose_timeline for a custom LevelSequence."
+
+### Niagara place (RE)
+
+> "RENiagaraWorkflowTools.place_niagara_system_and_verify: system `/Game/VFX/.../NS_FB_Projectile`, label `FX_Firebolt_Preview`, parameters_json for User scale."
+
+### Niagara authoring (Epic — one batch)
+
+> "Do not invent a Niagara DSL. Run **one** `ProgrammaticToolset.execute_tool_script` that creates the system, adds all emitters, sets renderer/materials, compiles once at the end, and saves. See `Docs/NIAGARA_BATCHING.md`."
 
 ### Level place
 

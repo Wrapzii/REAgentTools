@@ -1,0 +1,23 @@
+---
+description: REAgentTools MCP-first workflow and Remote Control oneshot fallback when mcp-unreal discovery fails
+alwaysApply: true
+---
+
+# Remote Control + REAgentTools (MCP preferred, RC one-shot fallback)
+
+When Unreal editor work is needed:
+
+1. **Prefer MCP** when `mcp-unreal` is ready. Call RE*WorkflowTools composites.
+2. **If `mcp-unreal` has `serverStatus: error` / loading / no tools** (common in Cursor Remote Control):
+   - Do **NOT** say "REAgentTools aren't reachable."
+   - Do **NOT** fall back to Epic `SceneTools` / `ActorTools` / `ObjectTools`.
+   - Do **NOT** invent ad-hoc `_rc_exec.py` one-shots for work RE composites cover.
+   - Use skill **`reagent-rc-oneshot`**: ONE RC/Python exec via `rc_bridge.oneshot_python({...})`, parse `REAGENT_RC_RESULT_BEGIN`…`END`. (~1 Cursor round-trip, same ballpark as one MCP call.)
+   - File protocol (`rc_request.json` → run → `rc_response.json`) is a 3-hop fallback only if stdout/log capture is unavailable.
+3. Trivia pushback still applies.
+4. On failure: one RE retry, then STOP.
+5. **Local MCP path:** Cursor should use anti-thrash proxy `:8001` (`Optional/UnrealMcpProxy`). Mid-session timeout → `unreal-watch.check_unreal` once → one batched MCP resubmit → only then RC. WinError 10048 / address-in-use → verify `GET /health` and reuse — **never kill/rebind `:8001`**.
+6. **Empty MCP replies:** “Unreal MCP returned an empty reply” → resubmit the same call **once**; the proxy re-establishes the session on the second empty. Only a *fresh* session returning empty means the editor is blocked. `call_tool` needs the `list_toolsets` registry name (`re_agent_tools.toolsets.context_tools.REContextTools`), and “Toolset not found” is a wrong argument — not a reason to switch to Epic tools or RC.
+7. **Niagara:** do **not** build a module-graph DSL. Place/params → `RENiagaraWorkflowTools`. System/emitter/renderer authoring → Epic `NiagaraToolsets.*` in **one** `ProgrammaticToolset.execute_tool_script`, compile **once** at the end. Never per-emitter MCP round-trips with re-find/re-compile between steps (`Docs/NIAGARA_BATCHING.md`).
+
+Read if needed: `Docs/AGENT_DEFAULTS.md`, `Docs/REMOTE_CONTROL_MCP.md`, `Docs/NIAGARA_BATCHING.md`, `Optional/UnrealMcpProxy/README.md`, `.cursor/skills/reagent-rc-oneshot/SKILL.md`.
